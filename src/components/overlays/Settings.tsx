@@ -38,14 +38,17 @@ interface SettingsProps {
   set: <K extends keyof TweakState>(key: K, value: TweakState[K]) => void;
   theme: TweakState["theme"];
   setTheme: (v: TweakState["theme"]) => void;
+  folderName?: string;
 }
 
-export function Settings({ s, set, theme, setTheme }: SettingsProps) {
+export function Settings({ s, set, theme, setTheme, folderName }: SettingsProps) {
   return (
     <div className="settings">
       <div className="settings-inner">
         <h1>Settings</h1>
-        <div className="sub">Preferences are scoped to this workspace · the-salt-road</div>
+        <div className="sub">
+          {folderName ? "Preferences for this workspace · " + folderName : "Preferences for this workspace"}
+        </div>
 
         <div className="set-section">
           <h2>General</h2>
@@ -64,12 +67,6 @@ export function Settings({ s, set, theme, setTheme }: SettingsProps) {
             >
               <option value="compact">Compact</option>
               <option value="comfortable">Comfortable</option>
-            </select>
-          </Row>
-          <Row t="Language" d="Spellcheck dictionary">
-            <select className="set-input">
-              <option>English (US)</option>
-              <option>English (UK)</option>
             </select>
           </Row>
         </div>
@@ -99,34 +96,20 @@ export function Settings({ s, set, theme, setTheme }: SettingsProps) {
         </div>
 
         <div className="set-section">
-          <h2>GitHub</h2>
+          <h2>Git</h2>
           <div className="gh-account">
             <span className="av">
-              <Icon name="github" size={20} fill />
+              <Icon name="git" size={20} />
             </span>
             <div>
-              <div className="nm">mira</div>
-              <div className="h">Connected · 3 repositories</div>
+              <div className="nm">System Git</div>
+              <div className="h">
+                Commit &amp; push use your machine's git and stored credentials.
+              </div>
             </div>
-            <span className="ok">
-              <Icon name="check" size={14} /> Authorized
-            </span>
           </div>
-          <Row t="Default branch" d="Used for new repositories">
-            <input className="set-input" defaultValue="main" />
-          </Row>
-          <Row t="Commit on save" d="Auto-commit when autosave fires">
+          <Row t="Commit on save" d="Auto-commit the file when you save with ⌘S">
             <Toggle on={s.commitOnSave} onClick={() => set("commitOnSave", !s.commitOnSave)} />
-          </Row>
-        </div>
-
-        <div className="set-section">
-          <h2>Terminal</h2>
-          <Row t="Default shell" d="Path to your login shell">
-            <input className="set-input" defaultValue="/bin/zsh" style={{ minWidth: 220 }} />
-          </Row>
-          <Row t="Font size" d="Terminal text">
-            <input className="set-input" defaultValue="13" style={{ minWidth: 80 }} />
           </Row>
         </div>
 

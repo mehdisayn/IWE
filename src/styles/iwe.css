@@ -108,11 +108,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; ba
   padding: 0 14px;
   position: relative;
 }
-.traffic { display: flex; gap: 8px; align-items: center; }
-.traffic i { width: 12px; height: 12px; border-radius: 50%; display: block; }
-.traffic .r { background: #ff5f57; }
-.traffic .y { background: #febc2e; }
-.traffic .g { background: #28c840; }
+/* Left column reserves space for the OS window controls (macOS overlay). */
+.tb-spacer { min-width: 68px; height: 100%; }
 .titlebar .title {
   text-align: center;
   color: var(--text-2);

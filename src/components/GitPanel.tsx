@@ -11,8 +11,8 @@ interface GitPanelProps {
   onCommit: () => void;
   onPush: () => void;
   onOpenFile: (path: string) => void;
-  onPickRepo: (e: React.MouseEvent) => void;
-  onAddRepo: () => void;
+  folderName: string;
+  onRefresh: () => void;
 }
 
 function splitName(p: string): { dir: string; name: string } {
@@ -65,17 +65,18 @@ export function GitPanel({
   onCommit,
   onPush,
   onOpenFile,
-  onPickRepo,
-  onAddRepo,
+  folderName,
+  onRefresh,
 }: GitPanelProps) {
   const staged = git.changes.filter((c) => c.staged);
   const unstaged = git.changes.filter((c) => !c.staged);
+  const isRepo = !!git.branch;
   return (
     <div className="panel gitpanel">
       <div className="panel-head">
         <span>Source Control</span>
         <span className="acts">
-          <button className="icon-btn" title="Refresh">
+          <button className="icon-btn" title="Refresh" onClick={onRefresh}>
             <Icon name="refresh" size={14} />
           </button>
           <button className="icon-btn" title="Stage All Changes" onClick={onStageAll}>
@@ -83,42 +84,50 @@ export function GitPanel({
           </button>
         </span>
       </div>
-      <div className="git-repo">
-        <button className="gh" onClick={onPickRepo} title="Switch repository" style={{ display: "flex" }}>
-          <Icon name="github" size={17} fill />
-        </button>
-        <span className="nm">{git.repo}</span>
-        <span className="branch">
-          <Icon name="branch" size={12} /> {git.branch}{" "}
-          {git.ahead > 0 && <span className="ahead">↑{git.ahead}</span>}
-        </span>
-      </div>
-      <div className="commit-box">
-        <textarea
-          className="commit-msg"
-          rows={2}
-          placeholder={'Message (⌘Enter to commit on "' + git.branch + '")'}
-          value={msg}
-          onChange={(e) => setMsg(e.target.value)}
-        />
-        <div className="commit-actions">
-          <button className="btn primary" disabled={staged.length === 0 || !msg.trim()} onClick={onCommit}>
-            <Icon name="check" size={15} /> Commit {staged.length ? `(${staged.length})` : ""}
-          </button>
-          <button className="btn ghost" title="Push" onClick={onPush}>
-            <Icon name="upload" size={15} />
-          </button>
+      {!isRepo ? (
+        <div className="git-empty" style={{ padding: "20px 14px" }}>
+          <strong>{folderName || "This folder"}</strong> is not a Git repository.
+          <br />
+          Run <code>git init</code> in the terminal to start tracking changes.
         </div>
-      </div>
-      <div className="git-list">
-        {git.changes.length === 0 && (
-          <div className="git-empty">
-            No changes.
-            <br />
-            Working tree clean.
+      ) : (
+        <>
+          <div className="git-repo">
+            <span className="gh" style={{ display: "flex" }}>
+              <Icon name="branch" size={16} />
+            </span>
+            <span className="nm">{folderName}</span>
+            <span className="branch">
+              <Icon name="branch" size={12} /> {git.branch}{" "}
+              {git.ahead > 0 && <span className="ahead">↑{git.ahead}</span>}
+            </span>
           </div>
-        )}
-        {staged.length > 0 && (
+          <div className="commit-box">
+            <textarea
+              className="commit-msg"
+              rows={2}
+              placeholder={'Message (⌘Enter to commit on "' + git.branch + '")'}
+              value={msg}
+              onChange={(e) => setMsg(e.target.value)}
+            />
+            <div className="commit-actions">
+              <button className="btn primary" disabled={staged.length === 0 || !msg.trim()} onClick={onCommit}>
+                <Icon name="check" size={15} /> Commit {staged.length ? `(${staged.length})` : ""}
+              </button>
+              <button className="btn ghost" title="Push" onClick={onPush}>
+                <Icon name="upload" size={15} />
+              </button>
+            </div>
+          </div>
+          <div className="git-list">
+            {git.changes.length === 0 && (
+              <div className="git-empty">
+                No changes.
+                <br />
+                Working tree clean.
+              </div>
+            )}
+            {staged.length > 0 && (
           <>
             <div className="git-group-label">
               Staged Changes <span className="ct">{staged.length}</span>
@@ -143,12 +152,11 @@ export function GitPanel({
                 onUnstage={onUnstage}
               />
             ))}
-          </>
-        )}
-        <button className="add-repo" onClick={onAddRepo}>
-          <Icon name="plus" size={14} /> Add Repository
-        </button>
-      </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

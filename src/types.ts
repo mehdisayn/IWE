@@ -33,15 +33,6 @@ export interface GitState {
   repos: string[];
 }
 
-export interface Vault {
-  repo: string;
-  branch: string;
-  folderName: string;
-  tree: TreeNode[];
-  files: Record<string, string>;
-  git: GitState;
-}
-
 export interface FlatFile {
   path: string;
   label: string;

@@ -8,10 +8,11 @@ interface StatusBarProps {
   value: string;
   caret: Caret;
   synced: boolean;
+  isRepo: boolean;
   onToggleTerminal: () => void;
 }
 
-export function StatusBar({ path, value, caret, synced, onToggleTerminal }: StatusBarProps) {
+export function StatusBar({ path, value, caret, synced, isRepo, onToggleTerminal }: StatusBarProps) {
   const words = useMemo(() => wordCount(value), [value]);
   const name = path ? path.split("/").pop() : "";
   return (
@@ -20,9 +21,15 @@ export function StatusBar({ path, value, caret, synced, onToggleTerminal }: Stat
         <Icon name="md" size={13} /> {name}
       </span>
       <span className="grow" />
-      <span className={"si sync " + (synced ? "synced" : "dirty")}>
-        <span className="dot" /> {synced ? "Synced" : "Uncommitted changes"}
-      </span>
+      {isRepo ? (
+        <span className={"si sync " + (synced ? "synced" : "dirty")}>
+          <span className="dot" /> {synced ? "Synced" : "Uncommitted changes"}
+        </span>
+      ) : (
+        <span className="si">
+          <span className="dot" /> Local
+        </span>
+      )}
       <span className="si">{words.toLocaleString()} words</span>
       <span className="si">
         Ln {caret.line}, Col {caret.col}

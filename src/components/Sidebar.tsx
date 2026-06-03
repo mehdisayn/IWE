@@ -72,8 +72,6 @@ interface SidebarProps {
   onOpenFile: (path: string) => void;
   onToggleFolder: (path: string) => void;
   onContext: (e: React.MouseEvent, node: TreeNode | null) => void;
-  repo: string;
-  onPickRepo: (e: React.MouseEvent) => void;
   onNewFile: (folder?: boolean) => void;
   onRefresh: () => void;
 }
@@ -86,8 +84,6 @@ export function Sidebar({
   onOpenFile,
   onToggleFolder,
   onContext,
-  repo,
-  onPickRepo,
   onNewFile,
   onRefresh,
 }: SidebarProps) {
@@ -120,17 +116,19 @@ export function Sidebar({
           />
         ))}
       </div>
-      <div className="repo-bar">
-        <button className="repo-sel" onClick={onPickRepo} title="Switch repository">
-          <span className="gh">
-            <Icon name="github" size={16} fill />
-          </span>
-          <span className="nm">{repo}</span>
-          <span className="br">
-            <Icon name="branch" size={12} /> {branch}
-          </span>
-        </button>
-      </div>
+      {branch && (
+        <div className="repo-bar">
+          <div className="repo-sel" style={{ cursor: "default" }} title="Current branch">
+            <span className="gh">
+              <Icon name="branch" size={16} />
+            </span>
+            <span className="nm">{folderName}</span>
+            <span className="br">
+              <Icon name="branch" size={12} /> {branch}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

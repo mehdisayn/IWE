@@ -11,28 +11,20 @@ import { EditorToolbar } from "./components/editor/EditorToolbar";
 import { Terminal } from "./components/Terminal";
 import { Palette, type Command, type PaletteMode } from "./components/overlays/Palette";
 import { ContextMenu, type ContextAction } from "./components/overlays/ContextMenu";
-import { RepoMenu } from "./components/overlays/RepoMenu";
 import { Settings } from "./components/overlays/Settings";
 import { Onboarding } from "./components/overlays/Onboarding";
 import { PromptModal, type PromptConfig } from "./components/overlays/PromptModal";
 import { Dashboard } from "./components/Dashboard";
-import { VAULT } from "./data/vault";
 import { wordCount } from "./lib/markdown";
+import { IS_TAURI, fsApi, gitApi } from "./lib/tauri";
 import type {
   Caret,
   EditorMode,
   FlatFile,
-  FolderNode,
   GitState,
   TreeNode,
   TweakState,
 } from "./types";
-
-function cloneTree(nodes: TreeNode[]): TreeNode[] {
-  return nodes.map((n) =>
-    n.type === "folder" ? { ...n, children: cloneTree(n.children) } : { ...n }
-  );
-}
 
 function flatten(nodes: TreeNode[], acc: FlatFile[]): FlatFile[] {
   nodes.forEach((n) => {
@@ -71,17 +63,17 @@ export default function App() {
   );
 
   const [onboarded, setOnboarded] = useState(false);
-  const [tree, setTree] = useState<TreeNode[]>(() => cloneTree(VAULT.tree));
-  const fileNames = useMemo(() => flatten(VAULT.tree, []), []);
+  // Absolute path of the opened folder. Null until the user opens one — the
+  // app shows real on-disk content only, never sample data.
+  const [root, setRoot] = useState<string | null>(null);
+  const [folderName, setFolderName] = useState("");
+  const [tree, setTree] = useState<TreeNode[]>([]);
+  const fileNames = useMemo(() => flatten(tree, []), [tree]);
 
-  const [files, setFiles] = useState<Record<string, string>>(() => ({ ...VAULT.files }));
-  const [saved, setSaved] = useState<Record<string, string>>(() => ({ ...VAULT.files }));
-  const [tabs, setTabs] = useState<string[]>([
-    "Manuscript/Chapter 03 — The Customs House.md",
-    "Manuscript/Chapter 01 — The Harbor.md",
-    "README.md",
-  ]);
-  const [active, setActive] = useState<string | null>("Manuscript/Chapter 03 — The Customs House.md");
+  const [files, setFiles] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState<Record<string, string>>({});
+  const [tabs, setTabs] = useState<string[]>([]);
+  const [active, setActive] = useState<string | null>(null);
   const [mode, setMode] = useState<EditorMode>("split");
   const [caret, setCaret] = useState<Caret>({ line: 1, col: 1 });
 
@@ -90,24 +82,105 @@ export default function App() {
   const [showTerm, setShowTerm] = useState(true);
   const [termMax, setTermMax] = useState(false);
 
-  const [git, setGit] = useState<GitState>(() => JSON.parse(JSON.stringify(VAULT.git)));
+  const [git, setGit] = useState<GitState>({
+    repo: "",
+    branch: "",
+    ahead: 0,
+    changes: [],
+    repos: [],
+  });
   const [commitMsg, setCommitMsg] = useState("");
 
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; node: TreeNode | null } | null>(null);
-  const [repoMenu, setRepoMenu] = useState<{ x: number; y: number } | null>(null);
   const [prompt, setPrompt] = useState<PromptConfig | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const taRef = useRef<HTMLTextAreaElement>(null);
   const toastTimer = useRef<number | null>(null);
-  const syncTimer = useRef<number | null>(null);
 
   const flash = useCallback((m: string) => {
     setToast(m);
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), 1900);
   }, []);
+
+  // Pull live git state from disk. No-op in the browser mock.
+  const refreshGit = useCallback(
+    (r: string | null = root) => {
+      if (!r) return;
+      gitApi
+        .status(r)
+        .then((st) => {
+          if (!st.is_repo) {
+            setGit((g) => ({ ...g, changes: [], ahead: 0 }));
+            return;
+          }
+          setGit((g) => ({ ...g, branch: st.branch, ahead: st.ahead, changes: st.changes }));
+        })
+        .catch(() => {});
+    },
+    [root]
+  );
+
+  // Re-read the folder tree from disk, preserving which folders are expanded.
+  const reloadTree = useCallback(
+    (r: string | null = root) => {
+      if (!r) return;
+      const openPaths = new Set<string>();
+      const collect = (nodes: TreeNode[]) =>
+        nodes.forEach((n) => {
+          if (n.type === "folder") {
+            if (n.open) openPaths.add(n.path);
+            collect(n.children);
+          }
+        });
+      collect(tree);
+      const applyOpen = (nodes: TreeNode[]): TreeNode[] =>
+        nodes.map((n) =>
+          n.type === "folder"
+            ? { ...n, open: openPaths.has(n.path), children: applyOpen(n.children) }
+            : n
+        );
+      fsApi
+        .listDir(r)
+        .then((t) => setTree(applyOpen(t)))
+        .catch((e) => flash("Reload failed: " + e));
+    },
+    [root, tree, flash]
+  );
+
+  // Open a real folder as the workspace (native only).
+  const openWorkspace = useCallback(
+    async (abs: string) => {
+      try {
+        const t = await fsApi.listDir(abs);
+        setRoot(abs);
+        setFolderName(abs.split("/").filter(Boolean).pop() || abs);
+        setTree(t);
+        setFiles({});
+        setSaved({});
+        setTabs([]);
+        setActive(null);
+        refreshGit(abs);
+        flash("Opened " + (abs.split("/").pop() || abs));
+      } catch (e) {
+        flash("Open failed: " + e);
+      }
+    },
+    [refreshGit, flash]
+  );
+
+  const pickFolder = useCallback(async () => {
+    try {
+      const abs = await fsApi.pickFolder();
+      if (abs) await openWorkspace(abs);
+      return abs;
+    } catch (e) {
+      flash("Picker failed: " + e);
+      return null;
+    }
+  }, [openWorkspace, flash]);
 
   useEffect(() => {
     const el = document.querySelector<HTMLDivElement>(".app");
@@ -133,11 +206,21 @@ export default function App() {
 
   const openFile = useCallback(
     (path: string) => {
-      if (!VAULT.files[path] && files[path] == null) return;
+      if (!root) return;
+      // Lazy-load from disk the first time a file is opened.
+      if (files[path] == null) {
+        fsApi
+          .readFile(root, path)
+          .then((content) => {
+            setFiles((f) => ({ ...f, [path]: content }));
+            setSaved((s) => ({ ...s, [path]: content }));
+          })
+          .catch((e) => flash("Open failed: " + e));
+      }
       setActive(path);
       setTabs((tb) => (tb.includes(path) ? tb : [path, ...tb]));
     },
-    [files]
+    [root, files, flash]
   );
 
   const toggleFolder = (path: string) => {
@@ -165,34 +248,47 @@ export default function App() {
     setFiles((f) => ({ ...f, [active]: val }));
   };
 
-  const markGitModified = (path: string) => {
-    setGit((g) => {
-      if (g.changes.some((c) => c.path === path)) return g;
-      return { ...g, changes: [...g.changes, { path, status: "M", staged: false, add: 1, del: 0 }] };
-    });
-  };
-
   const saveActive = useCallback(() => {
-    if (!active || active === "__settings__" || active === "__dashboard__") return;
+    if (!root || !active || active === "__settings__" || active === "__dashboard__") return;
     if (files[active] === saved[active]) {
       flash("Already saved");
       return;
     }
-    setSaved((s) => ({ ...s, [active]: files[active] }));
-    markGitModified(active);
-    flash("Saved · " + active.split("/").pop());
-  }, [active, files, saved, flash]);
+    const content = files[active];
+    const path = active;
+    setSaved((s) => ({ ...s, [path]: content }));
+    const label = path.split("/").pop();
+    fsApi
+      .writeFile(root, path, content)
+      .then(() => {
+        flash("Saved · " + label);
+        if (t.commitOnSave && git.branch) {
+          gitApi
+            .stage(root, path)
+            .then(() => gitApi.commit(root, "Update " + label))
+            .then(() => refreshGit())
+            .catch(() => refreshGit());
+        } else {
+          refreshGit();
+        }
+      })
+      .catch((e) => flash("Save failed: " + e));
+  }, [active, files, saved, flash, root, refreshGit, t.commitOnSave, git.branch]);
 
   useEffect(() => {
-    if (!t.autosave) return;
+    if (!t.autosave || !root) return;
     const id = window.setTimeout(() => {
       if (active && active !== "__settings__" && active !== "__dashboard__" && files[active] !== saved[active]) {
-        setSaved((s) => ({ ...s, [active]: files[active] }));
-        markGitModified(active);
+        const content = files[active];
+        setSaved((s) => ({ ...s, [active]: content }));
+        fsApi
+          .writeFile(root, active, content)
+          .then(() => refreshGit())
+          .catch(() => {});
       }
     }, 1200);
     return () => window.clearTimeout(id);
-  }, [files, active, t.autosave, saved]);
+  }, [files, active, t.autosave, saved, root, refreshGit]);
 
   const closeTab = (path: string) => {
     setTabs((tb) => {
@@ -216,59 +312,62 @@ export default function App() {
     }
   };
 
-  const stage = (p: string) =>
-    setGit((g) => ({ ...g, changes: g.changes.map((c) => (c.path === p ? { ...c, staged: true } : c)) }));
-  const unstage = (p: string) =>
-    setGit((g) => ({ ...g, changes: g.changes.map((c) => (c.path === p ? { ...c, staged: false } : c)) }));
-  const stageAll = () =>
-    setGit((g) => ({ ...g, changes: g.changes.map((c) => ({ ...c, staged: true })) }));
+  const stage = (p: string) => {
+    if (!root) return;
+    gitApi.stage(root, p).then(() => refreshGit()).catch((e) => flash("Stage failed: " + e));
+  };
+  const unstage = (p: string) => {
+    if (!root) return;
+    gitApi.unstage(root, p).then(() => refreshGit()).catch((e) => flash("Unstage failed: " + e));
+  };
+  const stageAll = () => {
+    if (!root) return;
+    gitApi.stageAll(root).then(() => refreshGit()).catch((e) => flash("Stage failed: " + e));
+  };
   const commit = () => {
+    if (!root) return;
     const staged = git.changes.filter((c) => c.staged);
     if (!staged.length || !commitMsg.trim()) return;
-    setGit((g) => ({ ...g, changes: g.changes.filter((c) => !c.staged), ahead: g.ahead + 1 }));
-    flash(`Committed ${staged.length} file${staged.length > 1 ? "s" : ""} on ${git.branch}`);
-    setCommitMsg("");
+    gitApi
+      .commit(root, commitMsg)
+      .then(() => {
+        refreshGit();
+        flash(`Committed on ${git.branch}`);
+        setCommitMsg("");
+      })
+      .catch((e) => flash("Commit failed: " + e));
   };
   const push = () => {
-    if (git.ahead === 0) {
-      flash("Nothing to push");
+    if (!root) return;
+    if (!git.branch) {
+      flash("Not a git repository");
       return;
     }
-    setGit((g) => ({ ...g, ahead: 0 }));
-    flash("Pushed to origin/" + git.branch);
-  };
-  const pickRepo = (r: string) => {
-    setGit((g) => ({ ...g, repo: r.split(" ")[0] }));
-    flash("Switched to " + r.split(" ")[0]);
+    flash("Pushing to origin/" + git.branch + "…");
+    gitApi
+      .push(root)
+      .then(() => {
+        refreshGit();
+        flash("Pushed to origin/" + git.branch);
+      })
+      .catch((e) => flash("Push failed: " + e));
   };
 
   const addNode = (name: string, isFolder: boolean, parentPath: string) => {
+    if (!root) return;
     const path =
       (parentPath ? parentPath + "/" : "") + name + (isFolder || name.endsWith(".md") ? "" : ".md");
-    const node: TreeNode = isFolder
-      ? ({ type: "folder", name, path, open: true, children: [] } as FolderNode)
-      : { type: "file", name: name.endsWith(".md") ? name : name + ".md", path, git: "A" };
-    const insert = (nodes: TreeNode[]): TreeNode[] => {
-      if (!parentPath) return [...nodes, node];
-      return nodes.map((n) =>
-        n.path === parentPath && n.type === "folder"
-          ? { ...n, open: true, children: [...n.children, node] }
-          : n.type === "folder"
-          ? { ...n, children: insert(n.children) }
-          : n
-      );
-    };
-    setTree((tr) => insert(tr));
-    if (!isFolder) {
-      setFiles((f) => ({ ...f, [node.path]: "# " + name.replace(/\.md$/, "") + "\n\n" }));
-      setSaved((s) => ({ ...s, [node.path]: "" }));
-      setGit((g) => ({
-        ...g,
-        changes: [...g.changes, { path: node.path, status: "A", staged: false, add: 1, del: 0 }],
-      }));
-      openFile(node.path);
-    }
-    flash((isFolder ? "Folder" : "Note") + " created · " + name);
+    const op = isFolder
+      ? fsApi.createFolder(root, path)
+      : fsApi.createFile(root, path, "# " + name.replace(/\.md$/, "") + "\n\n");
+    op
+      .then(() => {
+        reloadTree();
+        refreshGit();
+        if (!isFolder) openFile(path);
+        flash((isFolder ? "Folder" : "Note") + " created · " + name);
+      })
+      .catch((e) => flash("Create failed: " + e));
   };
 
   const ctxAction = (action: ContextAction, node: TreeNode | null) => {
@@ -314,26 +413,41 @@ export default function App() {
   };
 
   const renameNode = (node: TreeNode, newName: string) => {
-    if (!newName || newName === node.name) return;
-    const walk = (nodes: TreeNode[]): TreeNode[] =>
-      nodes.map((n) =>
-        n.path === node.path
-          ? ({ ...n, name: newName } as TreeNode)
-          : n.type === "folder"
-          ? { ...n, children: walk(n.children) }
-          : n
-      );
-    setTree((tr) => walk(tr));
-    flash("Renamed → " + newName);
+    if (!root || !newName || newName === node.name) return;
+    const parent = node.path.includes("/") ? node.path.slice(0, node.path.lastIndexOf("/")) : "";
+    const to = (parent ? parent + "/" : "") + newName;
+    // Remap the renamed path and, for a folder, any open child paths under it.
+    const remap = (p: string) =>
+      p === node.path
+        ? to
+        : node.type === "folder" && p.startsWith(node.path + "/")
+        ? to + p.slice(node.path.length)
+        : p;
+    fsApi
+      .rename(root, node.path, to)
+      .then(() => {
+        reloadTree();
+        refreshGit();
+        setTabs((tb) => tb.map(remap));
+        setActive((a) => (a ? remap(a) : a));
+        flash("Renamed → " + newName);
+      })
+      .catch((e) => flash("Rename failed: " + e));
   };
   const deleteNode = (node: TreeNode) => {
-    const walk = (nodes: TreeNode[]): TreeNode[] =>
-      nodes
-        .filter((n) => n.path !== node.path)
-        .map((n) => (n.type === "folder" ? { ...n, children: walk(n.children) } : n));
-    setTree((tr) => walk(tr));
-    closeTab(node.path);
-    flash("Deleted · " + node.name);
+    if (!root) return;
+    const isUnder = (p: string) =>
+      p === node.path || (node.type === "folder" && p.startsWith(node.path + "/"));
+    fsApi
+      .delete(root, node.path)
+      .then(() => {
+        reloadTree();
+        refreshGit();
+        setTabs((tb) => tb.filter((p) => !isUnder(p)));
+        setActive((a) => (a && isUnder(a) ? null : a));
+        flash("Deleted · " + node.name);
+      })
+      .catch((e) => flash("Delete failed: " + e));
   };
 
   const commands: Command[] = useMemo(
@@ -366,12 +480,22 @@ export default function App() {
     setActive("__dashboard__");
   };
   const doSync = () => {
-    flash("Syncing with origin/" + git.branch + "…");
-    if (syncTimer.current) window.clearTimeout(syncTimer.current);
-    syncTimer.current = window.setTimeout(() => {
-      setGit((g) => ({ ...g, ahead: 0 }));
-      flash("Workspace synced ✓");
-    }, 950);
+    if (!root) {
+      flash("Open a folder first");
+      return;
+    }
+    if (!git.branch) {
+      flash("Not a git repository");
+      return;
+    }
+    flash("Pushing to origin/" + git.branch + "…");
+    gitApi
+      .push(root)
+      .then(() => {
+        refreshGit();
+        flash("Workspace synced ✓");
+      })
+      .catch((e) => flash("Sync failed: " + e));
   };
 
   const runCmd = (id: string) => {
@@ -404,7 +528,6 @@ export default function App() {
         if (e.key === "Escape") {
           setPalette(null);
           setCtx(null);
-          setRepoMenu(null);
           setPrompt(null);
         }
         return;
@@ -439,7 +562,8 @@ export default function App() {
         openSettings();
       } else if (k === "o") {
         e.preventDefault();
-        flash("Open Folder — already in the-salt-road");
+        if (IS_TAURI) pickFolder();
+        else flash("Open Folder — native only (running in browser mock)");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -447,7 +571,20 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saveActive]);
 
-  if (!onboarded) return <Onboarding onOpen={() => setOnboarded(true)} />;
+  if (!onboarded)
+    return (
+      <Onboarding
+        onOpenFolder={
+          IS_TAURI
+            ? () => {
+                pickFolder().then((abs) => {
+                  if (abs) setOnboarded(true);
+                });
+              }
+            : undefined
+        }
+      />
+    );
 
   const activeVal =
     active && active !== "__settings__" && active !== "__dashboard__" ? files[active] ?? "" : "";
@@ -461,24 +598,37 @@ export default function App() {
 
   return (
     <div className="app" style={appStyle}>
-      <div className="titlebar">
-        <div className="traffic">
-          <i className="r" />
-          <i className="y" />
-          <i className="g" />
-        </div>
-        <div className="title">
+      <div className="titlebar" data-tauri-drag-region>
+        {/* Spacer reserves room for the native macOS window controls (Overlay titlebar). */}
+        <div className="tb-spacer" data-tauri-drag-region />
+        <div className="title" data-tauri-drag-region>
           <b>IWE</b>
-          <span className="dot">·</span>
-          <span>
-            {active && active !== "__settings__" && active !== "__dashboard__"
-              ? active.split("/").pop()!.replace(/\.md$/, "")
-              : active === "__dashboard__"
-              ? "Dashboard"
-              : "Settings"}
-          </span>
-          <span className="dot">—</span>
-          <span>{VAULT.folderName}</span>
+          {(() => {
+            const context =
+              active === "__settings__"
+                ? "Settings"
+                : active === "__dashboard__"
+                ? "Dashboard"
+                : active
+                ? active.split("/").pop()!.replace(/\.md$/, "")
+                : "";
+            return (
+              <>
+                {context && (
+                  <>
+                    <span className="dot">·</span>
+                    <span>{context}</span>
+                  </>
+                )}
+                {folderName && (
+                  <>
+                    <span className="dot">—</span>
+                    <span>{folderName}</span>
+                  </>
+                )}
+              </>
+            );
+          })()}
         </div>
         <div className="right">
           <button
@@ -529,8 +679,8 @@ export default function App() {
 
         {showSidebar && (
           <Sidebar
-            folderName={VAULT.folderName}
-            branch={VAULT.branch}
+            folderName={folderName}
+            branch={git.branch}
             tree={tree}
             activePath={active}
             onOpenFile={openFile}
@@ -539,10 +689,14 @@ export default function App() {
               e.preventDefault();
               setCtx({ x: e.clientX, y: e.clientY, node });
             }}
-            repo={git.repo}
-            onPickRepo={() => setRepoMenu({ x: 60, y: window.innerHeight - 150 })}
             onNewFile={(folder) => ctxAction(folder ? "newfolder" : "newfile", null)}
-            onRefresh={() => flash("Refreshed")}
+            onRefresh={() => {
+              if (root) {
+                reloadTree();
+                refreshGit();
+              }
+              flash("Refreshed");
+            }}
           />
         )}
 
@@ -550,15 +704,20 @@ export default function App() {
           <Tabs tabs={tabs} active={active} dirty={dirty} onSelect={setActive} onClose={closeTab} />
           {active === "__settings__" ? (
             <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
-              <Settings s={t} set={setTweak} theme={t.theme} setTheme={(v) => setTweak("theme", v)} />
+              <Settings s={t} set={setTweak} theme={t.theme} setTheme={(v) => setTweak("theme", v)} folderName={folderName} />
             </div>
           ) : active === "__dashboard__" ? (
             <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
               <Dashboard
+                folderName={folderName}
                 totalWords={totalWords}
+                files={fileNames}
+                recentPaths={tabs.filter((p) => p !== "__settings__" && p !== "__dashboard__")}
+                branch={git.branch}
+                changeCount={git.changes.length}
                 onOpenFile={openFile}
                 onNewDoc={() => ctxAction("newfile", null)}
-                onImport={() => flash("Import Folder — choose a directory to add")}
+                onImport={() => (IS_TAURI ? pickFolder() : flash("Open Folder — native only"))}
                 onManageSync={() => {
                   setShowGit(true);
                   flash("Source Control opened");
@@ -594,6 +753,7 @@ export default function App() {
                 value={activeVal}
                 caret={caret}
                 synced={isSynced}
+                isRepo={!!git.branch}
                 onToggleTerminal={() => setShowTerm((v) => !v)}
               />
             </>
@@ -615,14 +775,18 @@ export default function App() {
             onCommit={commit}
             onPush={push}
             onOpenFile={openFile}
-            onPickRepo={() => setRepoMenu({ x: window.innerWidth - 280, y: 120 })}
-            onAddRepo={() => flash("Connect a new GitHub repository")}
+            folderName={folderName}
+            onRefresh={() => {
+              reloadTree();
+              refreshGit();
+              flash("Refreshed");
+            }}
           />
         )}
       </div>
 
       {showTerm && (
-        <Terminal git={git} onClose={() => setShowTerm(false)} onToggleMax={() => setTermMax((v) => !v)} />
+        <Terminal cwd={root} onClose={() => setShowTerm(false)} onToggleMax={() => setTermMax((v) => !v)} />
       )}
 
       {palette && (
@@ -637,17 +801,6 @@ export default function App() {
       )}
       {ctx && (
         <ContextMenu x={ctx.x} y={ctx.y} node={ctx.node} onAction={ctxAction} onClose={() => setCtx(null)} />
-      )}
-      {repoMenu && (
-        <RepoMenu
-          x={repoMenu.x}
-          y={repoMenu.y}
-          repos={git.repos}
-          current={git.repo}
-          onPick={pickRepo}
-          onAdd={() => flash("Add a repository")}
-          onClose={() => setRepoMenu(null)}
-        />
       )}
       {prompt && <PromptModal {...prompt} onClose={() => setPrompt(null)} />}
       {toast && <div className="toast">{toast}</div>}
