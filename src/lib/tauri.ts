@@ -159,6 +159,23 @@ export const authApi = {
   poll: (deviceCode: string) => invoke<PollResult>("github_device_poll", { deviceCode }),
 };
 
+// Auto-updater: checks the configured endpoint, downloads + installs a newer
+// signed build, then relaunches. No-op (returns false) outside Tauri or when no
+// update is available.
+export const updateApi = {
+  checkAndInstall: async (onStatus: (s: string) => void): Promise<boolean> => {
+    if (!IS_TAURI) return false;
+    const { check } = await import("@tauri-apps/plugin-updater");
+    const update = await check();
+    if (!update) return false;
+    onStatus(`Installing ${update.version}…`);
+    await update.downloadAndInstall();
+    const { relaunch } = await import("@tauri-apps/plugin-process");
+    await relaunch();
+    return true;
+  },
+};
+
 // Misc native helpers and the native-menu event bridge.
 export const miscApi = {
   openExternal: (url: string): Promise<void> => {

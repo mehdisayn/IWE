@@ -27,6 +27,7 @@ import {
   watchApi,
   miscApi,
   authApi,
+  updateApi,
   type PersistedConfig,
   type Unlisten,
 } from "./lib/tauri";
@@ -824,10 +825,23 @@ export default function App() {
       ...(signinAvailable
         ? [{ id: "github.signin", label: "GitHub: Sign in (push)", icon: "github" }]
         : []),
+      ...(IS_TAURI
+        ? [{ id: "help.update", label: "Help: Check for Updates", icon: "download" }]
+        : []),
       { id: "help.about", label: "Help: About IWE", icon: "git" },
     ],
     [signinAvailable]
   );
+
+  const checkForUpdates = useCallback(() => {
+    flash("Checking for updates…");
+    updateApi
+      .checkAndInstall((s) => flash(s))
+      .then((found) => {
+        if (!found) flash("You're up to date");
+      })
+      .catch((e) => flash("Update check failed: " + e));
+  }, [flash]);
 
   const openSettings = () => {
     setTabs((tb) => (tb.includes("__settings__") ? tb : [...tb, "__settings__"]));
@@ -872,6 +886,7 @@ export default function App() {
     } else if (id === "git.push") push();
     else if (id === "settings.open") openSettings();
     else if (id === "help.about") setAbout(true);
+    else if (id === "help.update") checkForUpdates();
     else if (id === "github.signin") setSignin(true);
     else if (id.startsWith("theme.")) setTweak("theme", id.split(".")[1] as TweakState["theme"]);
   };
@@ -879,6 +894,7 @@ export default function App() {
   // Route native-menu item ids (see src-tauri/src/menu.rs) to app actions.
   const handleMenu = (id: string) => {
     if (id === "about") setAbout(true);
+    else if (id === "help.update") checkForUpdates();
     else if (id === "settings") openSettings();
     else if (id === "new") ctxAction("newfile", null);
     else if (id === "save") saveActive();
