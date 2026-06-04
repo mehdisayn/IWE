@@ -39,21 +39,26 @@ Path from working MVP to a signed public **1.0**. Mirrors the tracked task list 
 - [x] 🔧 **#20** Incremental tree updates + large-folder depth/size guard
 - [x] 🔧 **#21** Frontend tests (Vitest + Testing Library) + React error boundary
 
-## M4 — Terminal & Git completeness
+## M4 — Terminal & Git completeness ✅
 
-- [ ] ⭐ **#22** PTY terminal (`portable-pty` + xterm.js) — interactive programs & AI CLIs _(riskiest item)_
-- [ ] ⭐ **#23** GitHub push sign-in (OAuth device flow → system git credential helper, push-only)
-- [ ] 🔧 **#24** Git diff view, discard, pull/fetch, branch switch, conflict surfacing
+- [x] ⭐ **#22** PTY terminal (`portable-pty` + xterm.js) — interactive programs & AI CLIs _(riskiest item)_
+- [x] ⭐ **#23** GitHub push sign-in (OAuth device flow → system git credential helper, push-only)
+- [x] 🔧 **#24** Git diff view, discard, pull/fetch, branch switch, conflict surfacing
 
-## M5 — Packaging, signing & release
+## M5 — Packaging, signing & release ✅
 
-- [ ] 🚫 **#25** Replace placeholder Tauri icons with real brand assets
-- [ ] 🚫 **#26** macOS code signing + notarization in build _(needs #25)_
-- [ ] 🚫 **#27** Linux bundles `.deb`/`.rpm`/`.AppImage` (old glibc) + WebKitGTK runtime doc _(needs #25)_
-- [ ] 🚫 **#28** `release.yml` (tauri-action) signed GitHub Releases _(needs #13, #26, #27)_
-- [ ] ⭐ **#29** Auto-updater (`tauri-plugin-updater`) + signed manifest _(needs #28)_
-- [ ] 🔧 **#30** Strict CSP + security pass
-- [ ] ✨ **#31** App menu, About dialog, first-run + accessibility polish
+- [x] 🚫 **#25** Replace placeholder Tauri icons with real brand assets
+- [x] 🚫 **#26** macOS code signing + notarization in build — wired in `release.yml`; needs Apple secrets ⚠️
+- [x] 🚫 **#27** Linux bundles `.deb`/`.rpm`/`.AppImage` (old glibc) + WebKitGTK runtime doc
+- [x] 🚫 **#28** `release.yml` (tauri-action) signed GitHub Releases
+- [x] ⭐ **#29** Auto-updater (`tauri-plugin-updater`) + signed manifest — needs updater key secrets ⚠️
+- [x] 🔧 **#30** Strict CSP + security pass
+- [x] ✨ **#31** App menu, About dialog, first-run + accessibility polish
+
+> ⚠️ **Maintainer action required to ship binaries:** signing/notarization/updater
+> are fully wired but inert until repo secrets are added, and GitHub sign-in needs
+> an OAuth client id. See [docs/RELEASE.md §6](./docs/RELEASE.md) and
+> [docs/SECURITY.md](./docs/SECURITY.md).
 
 ---
 

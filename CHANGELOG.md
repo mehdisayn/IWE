@@ -30,6 +30,20 @@ All notable changes to IWE are documented here. Format based on
     depth/entry guard so very large or deep folders can't freeze the UI.
   - Frontend test suite (Vitest + Testing Library) and a top-level React error
     boundary with a recoverable crash screen.
+- Terminal & Git (M4):
+  - Real interactive terminal: PTY sessions (`portable-pty` + xterm.js) replace
+    one-shot exec, so REPLs, `vim`, and AI CLIs work; tabs keep shell state.
+  - GitHub push sign-in via OAuth Device Flow; the token is stored by the system
+    git credential helper, never by IWE (needs `IWE_GITHUB_CLIENT_ID`).
+  - Git diff viewer, discard, fetch, fast-forward pull, branch switcher, and
+    merge-conflict surfacing in the Source Control panel.
+- Packaging & release (M5):
+  - Original brand icon set (replaces the stock Tauri logo).
+  - Native application menu, an About dialog, and an accessibility pass
+    (aria-labels/roles on nav, toolbar, and dialogs).
+  - Strict Content-Security-Policy.
+  - Auto-updater (`tauri-plugin-updater`) with "Check for Updates", and a signed
+    `release.yml` building macOS (arm64/x64) + Linux (.deb/.rpm/.AppImage) bundles.
 
 ### Changed
 
