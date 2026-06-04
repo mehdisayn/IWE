@@ -36,7 +36,23 @@ Add the minimum permission when introducing a plugin (updater, fs-watch, shell).
 
 ## Content Security Policy
 
-`tauri.conf.json` → `app.security.csp` is currently `null` (permissive, fine for local dev). Before release, set a strict CSP (no remote script/connect except the update endpoint) — tracked in the roadmap.
+`tauri.conf.json` → `app.security.csp` is a strict, allow-list policy:
+
+- `default-src 'self'` — nothing loads cross-origin by default.
+- `script-src 'self'` — no inline or remote scripts; rules out injected `<script>`
+  and `eval`. (The markdown renderer only ever emits anchors/spans via `innerHTML`,
+  never executable content.)
+- `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com` — inline styles
+  (React `style` props, themed CSS vars) plus the Google Fonts stylesheet.
+- `font-src 'self' https://fonts.gstatic.com` — the bundled UI/mono fonts.
+- `connect-src 'self' ipc: http://ipc.localhost` — only the Tauri IPC bridge.
+- `object-src 'none'`, `frame-src 'none'`, `base-uri 'self'`, `form-action 'self'`.
+
+A separate `devCsp` additionally allows `'unsafe-eval'` and the Vite HMR websocket
+(`ws://localhost:1420`) so `tauri dev` works; production never gets those.
+
+> Future hardening: self-host the IBM Plex / JetBrains Mono fonts to drop the two
+> `fonts.g*` origins and make the policy fully `'self'` (also enables offline use).
 
 ## Reporting
 
