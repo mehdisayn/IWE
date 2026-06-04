@@ -1,0 +1,33 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="80" x2="900" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="nib" x1="512" y1="300" x2="512" y2="800" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EEF2FF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- App tile -->
+  <rect x="0" y="0" width="1024" height="1024" rx="232" fill="url(#bg)"/>
+  <rect x="6" y="6" width="1012" height="1012" rx="226" fill="none" stroke="#FFFFFF" stroke-opacity="0.10" stroke-width="12"/>
+
+  <!-- Fountain-pen nib: pointed at the writing tip, rounded at the top -->
+  <path d="M512 792
+           C 466 672 392 548 392 446
+           C 392 380 446 336 512 336
+           C 578 336 632 380 632 446
+           C 632 548 558 672 512 792 Z"
+        fill="url(#nib)"/>
+  <!-- Slit running up from the tip, cut through with the tile gradient -->
+  <path d="M512 360 L512 712" stroke="url(#bg)" stroke-width="14" stroke-linecap="round"/>
+  <!-- Vent hole -->
+  <circle cx="512" cy="452" r="34" fill="url(#bg)"/>
+
+  <!-- Terminal prompt mark, signalling the built-in terminal -->
+  <path d="M372 858 l44 -34 -44 -34" stroke="#FFFFFF" stroke-opacity="0.92" stroke-width="22"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M452 866 h120" stroke="#FFFFFF" stroke-opacity="0.92" stroke-width="22" stroke-linecap="round"/>
+</svg>
