@@ -14,6 +14,7 @@ import { ContextMenu, type ContextAction } from "./components/overlays/ContextMe
 import { Settings } from "./components/overlays/Settings";
 import { Onboarding } from "./components/overlays/Onboarding";
 import { PromptModal, type PromptConfig } from "./components/overlays/PromptModal";
+import { DiffModal, type DiffData } from "./components/overlays/DiffModal";
 import { Dashboard } from "./components/Dashboard";
 import { wordCount } from "./lib/markdown";
 import {
@@ -26,7 +27,15 @@ import {
   type Unlisten,
 } from "./lib/tauri";
 import { collectOpenPaths, applyOpen, spliceSubtree, parentDir } from "./lib/tree";
-import type { Caret, EditorMode, FlatFile, GitState, TreeNode, TweakState } from "./types";
+import type {
+  Caret,
+  EditorMode,
+  FlatFile,
+  GitChange,
+  GitState,
+  TreeNode,
+  TweakState,
+} from "./types";
 
 // Per-file load status, so binary/oversized files show a placeholder instead of
 // being decoded into the editor.
@@ -125,10 +134,13 @@ export default function App() {
     repo: "",
     branch: "",
     ahead: 0,
+    behind: 0,
     changes: [],
+    branches: [],
     repos: [],
   });
   const [commitMsg, setCommitMsg] = useState("");
+  const [diff, setDiff] = useState<DiffData | null>(null);
 
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; node: TreeNode | null } | null>(null);
@@ -166,10 +178,20 @@ export default function App() {
         .status(r)
         .then((st) => {
           if (!st.is_repo) {
-            setGit((g) => ({ ...g, changes: [], ahead: 0 }));
+            setGit((g) => ({ ...g, branch: "", changes: [], ahead: 0, behind: 0, branches: [] }));
             return;
           }
-          setGit((g) => ({ ...g, branch: st.branch, ahead: st.ahead, changes: st.changes }));
+          setGit((g) => ({
+            ...g,
+            branch: st.branch,
+            ahead: st.ahead,
+            behind: st.behind,
+            changes: st.changes,
+          }));
+          gitApi
+            .branches(r)
+            .then((bs) => setGit((g) => ({ ...g, branches: bs })))
+            .catch(() => {});
         })
         .catch(() => {});
     },
@@ -580,6 +602,68 @@ export default function App() {
         flash("Pushed to origin/" + git.branch);
       })
       .catch((e) => flash("Push failed: " + e));
+  };
+  const openDiff = (path: string, staged: boolean) => {
+    if (!root) return;
+    gitApi
+      .diff(root, path, staged)
+      .then((text) => setDiff({ path, staged, text }))
+      .catch((e) => flash("Diff failed: " + e));
+  };
+  const discardChange = (c: GitChange) => {
+    if (!root) return;
+    setPrompt({
+      title: 'Discard changes to "' + (c.path.split("/").pop() || c.path) + '"? Type yes',
+      value: "",
+      confirm: true,
+      onConfirm: (v) => {
+        if (v.toLowerCase() !== "yes" || !root) return;
+        gitApi
+          .discard(root, c.path)
+          .then(() => {
+            // If the discarded file is open, re-read it (or drop it if deleted).
+            if (tabs.includes(c.path)) loadFile(root, c.path).catch(() => {});
+            reloadTree();
+            refreshGit();
+            flash("Discarded · " + (c.path.split("/").pop() || c.path));
+          })
+          .catch((e) => flash("Discard failed: " + e));
+      },
+    });
+  };
+  const doFetch = () => {
+    if (!root || !git.branch) return;
+    flash("Fetching…");
+    gitApi
+      .fetch(root)
+      .then(() => {
+        refreshGit();
+        flash("Fetched");
+      })
+      .catch((e) => flash("Fetch failed: " + e));
+  };
+  const doPull = () => {
+    if (!root || !git.branch) return;
+    flash("Pulling origin/" + git.branch + "…");
+    gitApi
+      .pull(root)
+      .then(() => {
+        reloadTree();
+        refreshGit();
+        flash("Pulled origin/" + git.branch);
+      })
+      .catch((e) => flash("Pull failed: " + e));
+  };
+  const switchBranch = (name: string) => {
+    if (!root || name === git.branch) return;
+    gitApi
+      .checkout(root, name)
+      .then(() => {
+        reloadTree();
+        refreshGit();
+        flash("Switched to " + name);
+      })
+      .catch((e) => flash("Checkout failed: " + e));
   };
 
   const addNode = (name: string, isFolder: boolean, parentPath: string) => {
@@ -1024,6 +1108,11 @@ export default function App() {
             onStageAll={stageAll}
             onCommit={commit}
             onPush={push}
+            onPull={doPull}
+            onFetch={doFetch}
+            onDiff={openDiff}
+            onDiscard={discardChange}
+            onSwitchBranch={switchBranch}
             onOpenFile={openFile}
             folderName={folderName}
             onRefresh={() => {
@@ -1063,6 +1152,7 @@ export default function App() {
         />
       )}
       {prompt && <PromptModal {...prompt} onClose={() => setPrompt(null)} />}
+      {diff && <DiffModal diff={diff} onClose={() => setDiff(null)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

@@ -23,15 +23,23 @@ export interface GitChange {
   path: string;
   status: GitStatus;
   staged: boolean;
+  conflicted: boolean;
   add: number;
   del: number;
+}
+
+export interface BranchInfo {
+  name: string;
+  current: boolean;
 }
 
 export interface GitState {
   repo: string;
   branch: string;
   ahead: number;
+  behind: number;
   changes: GitChange[];
+  branches: BranchInfo[];
   repos: string[];
 }
 

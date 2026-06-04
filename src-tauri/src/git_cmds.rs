@@ -11,6 +11,7 @@ pub struct GitChange {
     pub path: String,
     pub status: String, // "M" | "A" | "D"
     pub staged: bool,
+    pub conflicted: bool,
     pub add: u32,
     pub del: u32,
 }
@@ -20,7 +21,14 @@ pub struct GitStatus {
     pub is_repo: bool,
     pub branch: String,
     pub ahead: u32,
+    pub behind: u32,
     pub changes: Vec<GitChange>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct BranchInfo {
+    pub name: String,
+    pub current: bool,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -88,6 +96,7 @@ pub fn git_status(root: String) -> Result<GitStatus, String> {
             is_repo: false,
             branch: String::new(),
             ahead: 0,
+            behind: 0,
             changes: vec![],
         });
     }
@@ -97,8 +106,13 @@ pub fn git_status(root: String) -> Result<GitStatus, String> {
         .trim()
         .to_string();
 
-    // Commits ahead of upstream (0 if no upstream configured).
+    // Commits ahead of / behind upstream (0 if no upstream configured).
     let ahead = git(&root, &["rev-list", "--count", "@{u}..HEAD"])
+        .ok()
+        .filter(|r| r.ok)
+        .and_then(|r| r.stdout.trim().parse::<u32>().ok())
+        .unwrap_or(0);
+    let behind = git(&root, &["rev-list", "--count", "HEAD..@{u}"])
         .ok()
         .filter(|r| r.ok)
         .and_then(|r| r.stdout.trim().parse::<u32>().ok())
@@ -125,7 +139,13 @@ pub fn git_status(root: String) -> Result<GitStatus, String> {
             .trim_matches('"')
             .to_string();
 
-        let is_staged = index != ' ' && index != '?';
+        // Merge conflicts: either side shows 'U', or both sides are identical
+        // add/delete markers (AA / DD). These aren't simply staged/unstaged.
+        let conflicted = index == 'U'
+            || worktree == 'U'
+            || (index == worktree && (index == 'A' || index == 'D'));
+
+        let is_staged = !conflicted && index != ' ' && index != '?';
         let code = if is_staged { index } else { worktree };
         let (add, del) = if is_staged {
             staged_stats.get(&path).copied().unwrap_or((0, 0))
@@ -136,6 +156,7 @@ pub fn git_status(root: String) -> Result<GitStatus, String> {
             path,
             status: map_code(code).to_string(),
             staged: is_staged,
+            conflicted,
             add,
             del,
         });
@@ -145,6 +166,7 @@ pub fn git_status(root: String) -> Result<GitStatus, String> {
         is_repo: true,
         branch,
         ahead,
+        behind,
         changes,
     })
 }
@@ -217,6 +239,129 @@ pub fn git_log(root: String) -> Result<String, String> {
     let res = git(&root, &["log", "--oneline", "-n", "30"])?;
     if res.ok {
         Ok(res.stdout)
+    } else {
+        Err(res.stderr)
+    }
+}
+
+/// Is `path` tracked by git in this repo?
+fn is_tracked(root: &str, path: &str) -> bool {
+    git(root, &["ls-files", "--error-unmatch", "--", path])
+        .map(|r| r.ok)
+        .unwrap_or(false)
+}
+
+/// Unified diff for a single path. `staged` shows the index-vs-HEAD diff;
+/// otherwise the worktree diff. Untracked files are shown as all-additions.
+#[tauri::command]
+pub fn git_diff(root: String, path: String, staged: bool) -> Result<String, String> {
+    if !staged && !is_tracked(&root, &path) {
+        // `--no-index` exits non-zero when files differ but still prints the diff.
+        let res = git(&root, &["diff", "--no-index", "--", "/dev/null", &path])?;
+        return Ok(res.stdout);
+    }
+    let mut args = vec!["diff"];
+    if staged {
+        args.push("--cached");
+    }
+    args.push("--");
+    args.push(&path);
+    let res = git(&root, &args)?;
+    if res.ok {
+        Ok(res.stdout)
+    } else {
+        Err(res.stderr)
+    }
+}
+
+/// Discard local changes to a path: unstage + restore tracked files, or delete
+/// untracked ones. Destructive — the UI must confirm first.
+#[tauri::command]
+pub fn git_discard(root: String, path: String) -> Result<(), String> {
+    if is_tracked(&root, &path) {
+        // Modern git: restore staged + worktree in one shot.
+        let res = git(&root, &["restore", "--staged", "--worktree", "--", &path])?;
+        if res.ok {
+            return Ok(());
+        }
+        // Fallback for older git.
+        let _ = git(&root, &["reset", "HEAD", "--", &path]);
+        let res = git(&root, &["checkout", "--", &path])?;
+        if res.ok {
+            Ok(())
+        } else {
+            Err(res.stderr)
+        }
+    } else {
+        let res = git(&root, &["clean", "-fd", "--", &path])?;
+        if res.ok {
+            Ok(())
+        } else {
+            Err(res.stderr)
+        }
+    }
+}
+
+/// Fetch all remotes (prune deleted branches). Returns combined output.
+#[tauri::command]
+pub fn git_fetch(root: String) -> Result<String, String> {
+    let res = git(&root, &["fetch", "--all", "--prune"])?;
+    if res.ok {
+        Ok(format!("{}{}", res.stdout, res.stderr))
+    } else {
+        Err(res.stderr)
+    }
+}
+
+/// Fast-forward pull. Fails loudly (rather than creating a merge) when the
+/// branches have diverged, so conflicts surface instead of silent merges.
+#[tauri::command]
+pub fn git_pull(root: String) -> Result<String, String> {
+    let res = git(&root, &["pull", "--ff-only"])?;
+    if res.ok {
+        Ok(format!("{}{}", res.stdout, res.stderr))
+    } else {
+        Err(if res.stderr.is_empty() {
+            res.stdout
+        } else {
+            res.stderr
+        })
+    }
+}
+
+/// Local branches, with the current one flagged.
+#[tauri::command]
+pub fn git_branches(root: String) -> Result<Vec<BranchInfo>, String> {
+    let current = git(&root, &["rev-parse", "--abbrev-ref", "HEAD"])?
+        .stdout
+        .trim()
+        .to_string();
+    let res = git(
+        &root,
+        &["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+    )?;
+    if !res.ok {
+        return Err(res.stderr);
+    }
+    Ok(res
+        .stdout
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .map(|name| BranchInfo {
+            name: name.to_string(),
+            current: name == current,
+        })
+        .collect())
+}
+
+/// Switch to an existing local branch. Git itself refuses if the worktree has
+/// conflicting changes, and that error is surfaced to the user.
+#[tauri::command]
+pub fn git_checkout(root: String, branch: String) -> Result<(), String> {
+    let res = git(&root, &["checkout", &branch])?;
+    if res.ok {
+        Ok(())
     } else {
         Err(res.stderr)
     }
@@ -300,6 +445,67 @@ mod tests {
 
         let log = git_log(root.clone()).unwrap();
         assert!(log.contains("init") && log.contains("second"));
+
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn diff_shows_changes_and_untracked() {
+        let root = setup_repo();
+        fs::write(format!("{}/a.md", root), "one\n").unwrap();
+        git_stage_all(root.clone()).unwrap();
+        git_commit(root.clone(), "init".into()).unwrap();
+
+        // Modify tracked file → worktree diff mentions the new line.
+        fs::write(format!("{}/a.md", root), "one\ntwo\n").unwrap();
+        let d = git_diff(root.clone(), "a.md".into(), false).unwrap();
+        assert!(d.contains("+two"), "diff should include the added line");
+
+        // Untracked file → shown as all additions.
+        fs::write(format!("{}/new.md", root), "fresh\n").unwrap();
+        let d = git_diff(root.clone(), "new.md".into(), false).unwrap();
+        assert!(d.contains("+fresh"), "untracked diff should show additions");
+
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn discard_reverts_tracked_and_removes_untracked() {
+        let root = setup_repo();
+        fs::write(format!("{}/a.md", root), "one\n").unwrap();
+        git_stage_all(root.clone()).unwrap();
+        git_commit(root.clone(), "init".into()).unwrap();
+
+        fs::write(format!("{}/a.md", root), "DIRTY\n").unwrap();
+        git_discard(root.clone(), "a.md".into()).unwrap();
+        assert_eq!(
+            fs::read_to_string(format!("{}/a.md", root)).unwrap(),
+            "one\n"
+        );
+
+        fs::write(format!("{}/junk.md", root), "x\n").unwrap();
+        git_discard(root.clone(), "junk.md".into()).unwrap();
+        assert!(!std::path::Path::new(&format!("{}/junk.md", root)).exists());
+
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn branches_list_and_checkout() {
+        let root = setup_repo();
+        fs::write(format!("{}/a.md", root), "one\n").unwrap();
+        git_stage_all(root.clone()).unwrap();
+        git_commit(root.clone(), "init".into()).unwrap();
+
+        git(&root, &["branch", "draft"]).unwrap();
+        let branches = git_branches(root.clone()).unwrap();
+        let names: Vec<&str> = branches.iter().map(|b| b.name.as_str()).collect();
+        assert!(names.contains(&"main") && names.contains(&"draft"));
+        assert!(branches.iter().find(|b| b.name == "main").unwrap().current);
+
+        git_checkout(root.clone(), "draft".into()).unwrap();
+        let st = git_status(root.clone()).unwrap();
+        assert_eq!(st.branch, "draft");
 
         fs::remove_dir_all(root).ok();
     }

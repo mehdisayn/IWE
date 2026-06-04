@@ -51,6 +51,7 @@ export interface RawGitChange {
   path: string;
   status: "M" | "A" | "D";
   staged: boolean;
+  conflicted: boolean;
   add: number;
   del: number;
 }
@@ -59,7 +60,13 @@ export interface RawGitStatus {
   is_repo: boolean;
   branch: string;
   ahead: number;
+  behind: number;
   changes: RawGitChange[];
+}
+
+export interface RawBranchInfo {
+  name: string;
+  current: boolean;
 }
 
 export const gitApi = {
@@ -70,6 +77,13 @@ export const gitApi = {
   commit: (root: string, message: string) => invoke<string>("git_commit", { root, message }),
   push: (root: string) => invoke<string>("git_push", { root }),
   log: (root: string) => invoke<string>("git_log", { root }),
+  diff: (root: string, path: string, staged: boolean) =>
+    invoke<string>("git_diff", { root, path, staged }),
+  discard: (root: string, path: string) => invoke<void>("git_discard", { root, path }),
+  fetch: (root: string) => invoke<string>("git_fetch", { root }),
+  pull: (root: string) => invoke<string>("git_pull", { root }),
+  branches: (root: string) => invoke<RawBranchInfo[]>("git_branches", { root }),
+  checkout: (root: string, branch: string) => invoke<void>("git_checkout", { root, branch }),
 };
 
 export interface CommandOutput {
