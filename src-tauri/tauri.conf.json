@@ -42,6 +42,14 @@
     "category": "Productivity",
     "shortDescription": "Integrated Writing Environment",
     "longDescription": "A markdown workspace with a built-in terminal and Git, for people who write.",
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"]
+      }
+    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }
