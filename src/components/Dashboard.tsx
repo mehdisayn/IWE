@@ -36,7 +36,13 @@ interface DashboardProps {
   onSearchAll: () => void;
 }
 
-const TYPE_COLORS = ["var(--accent)", "var(--green)", "var(--yellow)", "var(--red)", "var(--text-3)"];
+const TYPE_COLORS = [
+  "var(--accent)",
+  "var(--green)",
+  "var(--yellow)",
+  "var(--red)",
+  "var(--text-3)",
+];
 
 function ext(path: string): string {
   const dot = path.lastIndexOf(".");
@@ -143,7 +149,11 @@ export function Dashboard({
       <div className="db-scroll">
         <div className="db-stats">
           <StatCard label="FILES" value={String(fileCount)} sub={folderCount + " folders"} />
-          <StatCard label="WORDS" value={totalWords >= 1000 ? (totalWords / 1000).toFixed(1) + "k" : String(totalWords)} sub={"~" + pages + " pages"} />
+          <StatCard
+            label="WORDS"
+            value={totalWords >= 1000 ? (totalWords / 1000).toFixed(1) + "k" : String(totalWords)}
+            sub={"~" + pages + " pages"}
+          />
           <StatCard
             label="GIT"
             value={branch || "—"}
@@ -170,8 +180,8 @@ export function Dashboard({
                     {q.trim()
                       ? "No matching files."
                       : fileCount === 0
-                      ? "This folder is empty. Create a note to get started."
-                      : "Open a file and it will show up here."}
+                        ? "This folder is empty. Create a note to get started."
+                        : "Open a file and it will show up here."}
                   </div>
                 )}
                 {list.map((d) => (
@@ -224,7 +234,10 @@ export function Dashboard({
                         </span>
                       </div>
                       <div className="db-bd-track">
-                        <div className="db-bd-fill" style={{ width: b.pct + "%", background: b.color }} />
+                        <div
+                          className="db-bd-fill"
+                          style={{ width: b.pct + "%", background: b.color }}
+                        />
                       </div>
                     </div>
                   ))}

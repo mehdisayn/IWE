@@ -28,10 +28,16 @@ export function EditorToolbar({ path, mode, setMode }: EditorToolbarProps) {
         <button className={"seg" + (mode === "edit" ? " on" : "")} onClick={() => setMode("edit")}>
           <Icon name="edit" size={14} /> Edit
         </button>
-        <button className={"seg" + (mode === "preview" ? " on" : "")} onClick={() => setMode("preview")}>
+        <button
+          className={"seg" + (mode === "preview" ? " on" : "")}
+          onClick={() => setMode("preview")}
+        >
           <Icon name="eye" size={14} /> Preview
         </button>
-        <button className={"seg" + (mode === "split" ? " on" : "")} onClick={() => setMode("split")}>
+        <button
+          className={"seg" + (mode === "split" ? " on" : "")}
+          onClick={() => setMode("split")}
+        >
           <Icon name="columns" size={14} /> Split
         </button>
       </div>

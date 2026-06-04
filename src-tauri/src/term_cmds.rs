@@ -62,3 +62,48 @@ pub fn change_dir(cwd: String, target: String) -> Result<String, String> {
 fn dirs_home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn tmp_dir() -> String {
+        let n = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("iwe_term_{:?}_{}", std::thread::current().id(), n));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.canonicalize().unwrap().to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn runs_command_in_cwd() {
+        let root = tmp_dir();
+        std::fs::write(format!("{}/note.md", root), "x").unwrap();
+        let out = run_command(root.clone(), "ls".into()).unwrap();
+        assert!(out.stdout.contains("note.md"));
+        assert_eq!(out.code, 0);
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn change_dir_into_subfolder_and_up() {
+        let root = tmp_dir();
+        std::fs::create_dir_all(format!("{}/sub", root)).unwrap();
+        let into = change_dir(root.clone(), "sub".into()).unwrap();
+        assert!(into.ends_with("/sub"));
+        let up = change_dir(into, "..".into()).unwrap();
+        assert_eq!(up, root);
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn change_dir_rejects_missing() {
+        let root = tmp_dir();
+        assert!(change_dir(root.clone(), "nope".into()).is_err());
+        std::fs::remove_dir_all(root).ok();
+    }
+}

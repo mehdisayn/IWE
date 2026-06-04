@@ -211,7 +211,11 @@ export function Terminal({ cwd, onClose, onToggleMax }: TerminalProps) {
           </button>
         </div>
       </div>
-      <div className="term-body" ref={bodyRef} onClick={() => inRef.current && inRef.current.focus()}>
+      <div
+        className="term-body"
+        ref={bodyRef}
+        onClick={() => inRef.current && inRef.current.focus()}
+      >
         {!hasFolder ? (
           <Line cls="muted">Open a folder to use the terminal.</Line>
         ) : (

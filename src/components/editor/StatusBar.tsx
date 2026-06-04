@@ -12,7 +12,14 @@ interface StatusBarProps {
   onToggleTerminal: () => void;
 }
 
-export function StatusBar({ path, value, caret, synced, isRepo, onToggleTerminal }: StatusBarProps) {
+export function StatusBar({
+  path,
+  value,
+  caret,
+  synced,
+  isRepo,
+  onToggleTerminal,
+}: StatusBarProps) {
   const words = useMemo(() => wordCount(value), [value]);
   const name = path ? path.split("/").pop() : "";
   return (

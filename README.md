@@ -52,17 +52,17 @@ src/
 
 ## Keyboard shortcuts
 
-| Action | Shortcut |
-| --- | --- |
-| Toggle sidebar | `⌘B` |
-| Toggle terminal | `` ⌘` `` |
-| Toggle source control | `⌘⇧G` |
-| Command palette | `⌘⇧P` |
-| Quick file switcher | `⌘P` |
-| Switch edit/preview/split | `⌘⇧V` |
-| New note | `⌘N` |
-| Save | `⌘S` |
-| Settings | `⌘,` |
+| Action                    | Shortcut |
+| ------------------------- | -------- |
+| Toggle sidebar            | `⌘B`     |
+| Toggle terminal           | `` ⌘` `` |
+| Toggle source control     | `⌘⇧G`    |
+| Command palette           | `⌘⇧P`    |
+| Quick file switcher       | `⌘P`     |
+| Switch edit/preview/split | `⌘⇧V`    |
+| New note                  | `⌘N`     |
+| Save                      | `⌘S`     |
+| Settings                  | `⌘,`     |
 
 ## Themes
 

@@ -2,8 +2,12 @@ import type { CSSProperties, ReactNode } from "react";
 
 const ICON_PATHS: Record<string, ReactNode> = {
   chevron: <polyline points="9 6 15 12 9 18" />,
-  folder: <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.2h7A1.5 1.5 0 0 1 19 8.7v9.3a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 18z" />,
-  "folder-open": <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.2h7A1.5 1.5 0 0 1 19 8.7M3 6.5V18a1.5 1.5 0 0 0 1.5 1.5h13L21 11H7.2z" />,
+  folder: (
+    <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.2h7A1.5 1.5 0 0 1 19 8.7v9.3a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 18z" />
+  ),
+  "folder-open": (
+    <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.2h7A1.5 1.5 0 0 1 19 8.7M3 6.5V18a1.5 1.5 0 0 0 1.5 1.5h13L21 11H7.2z" />
+  ),
   file: (
     <>
       <path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z" />
@@ -119,7 +123,9 @@ const ICON_PATHS: Record<string, ReactNode> = {
     </>
   ),
   rename: <path d="M4 7V5h16v2M9 5v14M7 19h4M14 19h6M14 12h6M14 15h4" />,
-  command: <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 0 0 0-6z" />,
+  command: (
+    <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 0 0 0-6z" />
+  ),
   arrowright: (
     <>
       <line x1="5" y1="12" x2="19" y2="12" />

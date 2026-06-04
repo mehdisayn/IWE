@@ -1,4 +1,5 @@
 # IWE — Integrated Writing Environment
+
 ## Project Brief for Claude Code
 
 ---
@@ -23,30 +24,36 @@ It is NOT just a note-taking app. It is a full **writing IDE** — with a built-
 ## Core Features (v1)
 
 ### 1. Markdown Editor
+
 - Clean, distraction-free writing experience
 - Live markdown preview
 - File tree on the left sidebar (like VS Code explorer)
 - Note linking (like Obsidian `[[wikilinks]]`)
 
 ### 2. Built-in Terminal
+
 - Toggleable terminal panel (like VS Code's integrated terminal)
 - Run any CLI tool from inside the app
 - Specifically useful for running AI CLIs (Claude, Codex, etc.)
 
 ### 3. GitHub Sync
+
 - Connect multiple GitHub repos (public, private, AI memory, etc.)
 - Commit and push from inside the app — no need to open a separate terminal
 - Choose which file/folder goes to which repo
 - Simple UI panel similar to VS Code's Source Control tab
 
 ### 4. Multi-Repo Support
+
 Users can connect and manage multiple repos:
+
 - Public knowledge base repo
 - Private notes repo
 - AI memory repo (Claude, Codex, etc.)
 - Any custom repo they want
 
 ### 5. Extension System (v2)
+
 - Plugin/extension marketplace — like VS Code extensions
 - Community can build on top of IWE
 - Not for coding extensions — for writing workflows (publishing, AI tools, templates, etc.)
@@ -122,7 +129,9 @@ IWE/
 🟡 Planning phase — no code written yet. Start from scratch.
 
 ### First Milestone
+
 Get a basic working shell:
+
 - [ ] Tauri app boots on Mac and Linux
 - [ ] File tree loads a local folder
 - [ ] Markdown editor opens and saves files

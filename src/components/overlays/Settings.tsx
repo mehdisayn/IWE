@@ -47,13 +47,19 @@ export function Settings({ s, set, theme, setTheme, folderName }: SettingsProps)
       <div className="settings-inner">
         <h1>Settings</h1>
         <div className="sub">
-          {folderName ? "Preferences for this workspace · " + folderName : "Preferences for this workspace"}
+          {folderName
+            ? "Preferences for this workspace · " + folderName
+            : "Preferences for this workspace"}
         </div>
 
         <div className="set-section">
           <h2>General</h2>
           <Row t="Theme" d="Visual direction for the whole app">
-            <select className="set-input" value={theme} onChange={(e) => setTheme(e.target.value as TweakState["theme"])}>
+            <select
+              className="set-input"
+              value={theme}
+              onChange={(e) => setTheme(e.target.value as TweakState["theme"])}
+            >
               <option value="slate">Soft Slate</option>
               <option value="terminal">True Terminal</option>
               <option value="warm">Warm Ink</option>
@@ -119,8 +125,8 @@ export function Settings({ s, set, theme, setTheme, folderName }: SettingsProps)
             className="git-empty"
             style={{ textAlign: "left", padding: "8px 0", color: "var(--text-2)" }}
           >
-            Extension marketplace arrives in <span className="kbd">v2</span>. You'll be able to browse and install
-            themes, exporters, and AI integrations here.
+            Extension marketplace arrives in <span className="kbd">v2</span>. You'll be able to
+            browse and install themes, exporters, and AI integrations here.
           </div>
         </div>
       </div>

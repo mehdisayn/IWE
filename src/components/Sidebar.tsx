@@ -11,7 +11,14 @@ interface TreeNodeProps {
   onContext: (e: React.MouseEvent, node: TreeNode) => void;
 }
 
-function TreeNodeRow({ node, depth, activePath, onOpenFile, onToggleFolder, onContext }: TreeNodeProps) {
+function TreeNodeRow({
+  node,
+  depth,
+  activePath,
+  onOpenFile,
+  onToggleFolder,
+  onContext,
+}: TreeNodeProps) {
   const pad: CSSProperties = { paddingLeft: 6 + depth * 14 + "px" };
   if (node.type === "folder") {
     return (

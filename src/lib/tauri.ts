@@ -32,10 +32,8 @@ export const fsApi = {
     invoke<void>("write_file", { root, path, content }),
   createFile: (root: string, path: string, content = "") =>
     invoke<void>("create_file", { root, path, content }),
-  createFolder: (root: string, path: string) =>
-    invoke<void>("create_folder", { root, path }),
-  rename: (root: string, from: string, to: string) =>
-    invoke<void>("rename", { root, from, to }),
+  createFolder: (root: string, path: string) => invoke<void>("create_folder", { root, path }),
+  rename: (root: string, from: string, to: string) => invoke<void>("rename", { root, from, to }),
   delete: (root: string, path: string) => invoke<void>("delete", { root, path }),
 };
 

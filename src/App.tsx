@@ -17,14 +17,7 @@ import { PromptModal, type PromptConfig } from "./components/overlays/PromptModa
 import { Dashboard } from "./components/Dashboard";
 import { wordCount } from "./lib/markdown";
 import { IS_TAURI, fsApi, gitApi } from "./lib/tauri";
-import type {
-  Caret,
-  EditorMode,
-  FlatFile,
-  GitState,
-  TreeNode,
-  TweakState,
-} from "./types";
+import type { Caret, EditorMode, FlatFile, GitState, TreeNode, TweakState } from "./types";
 
 function flatten(nodes: TreeNode[], acc: FlatFile[]): FlatFile[] {
   nodes.forEach((n) => {
@@ -55,12 +48,9 @@ type CssVarStyle = CSSProperties & Record<`--${string}`, string | number>;
 
 export default function App() {
   const [t, setTweakState] = useState<TweakState>(TWEAK_DEFAULTS);
-  const setTweak = useCallback(
-    <K extends keyof TweakState>(key: K, value: TweakState[K]) => {
-      setTweakState((prev) => ({ ...prev, [key]: value }));
-    },
-    []
-  );
+  const setTweak = useCallback(<K extends keyof TweakState>(key: K, value: TweakState[K]) => {
+    setTweakState((prev) => ({ ...prev, [key]: value }));
+  }, []);
 
   const [onboarded, setOnboarded] = useState(false);
   // Absolute path of the opened folder. Null until the user opens one — the
@@ -229,8 +219,8 @@ export default function App() {
         n.path === path && n.type === "folder"
           ? { ...n, open: !n.open }
           : n.type === "folder"
-          ? { ...n, children: walk(n.children) }
-          : n
+            ? { ...n, children: walk(n.children) }
+            : n
       );
     setTree((tr) => walk(tr));
   };
@@ -278,7 +268,12 @@ export default function App() {
   useEffect(() => {
     if (!t.autosave || !root) return;
     const id = window.setTimeout(() => {
-      if (active && active !== "__settings__" && active !== "__dashboard__" && files[active] !== saved[active]) {
+      if (
+        active &&
+        active !== "__settings__" &&
+        active !== "__dashboard__" &&
+        files[active] !== saved[active]
+      ) {
         const content = files[active];
         setSaved((s) => ({ ...s, [active]: content }));
         fsApi
@@ -314,15 +309,24 @@ export default function App() {
 
   const stage = (p: string) => {
     if (!root) return;
-    gitApi.stage(root, p).then(() => refreshGit()).catch((e) => flash("Stage failed: " + e));
+    gitApi
+      .stage(root, p)
+      .then(() => refreshGit())
+      .catch((e) => flash("Stage failed: " + e));
   };
   const unstage = (p: string) => {
     if (!root) return;
-    gitApi.unstage(root, p).then(() => refreshGit()).catch((e) => flash("Unstage failed: " + e));
+    gitApi
+      .unstage(root, p)
+      .then(() => refreshGit())
+      .catch((e) => flash("Unstage failed: " + e));
   };
   const stageAll = () => {
     if (!root) return;
-    gitApi.stageAll(root).then(() => refreshGit()).catch((e) => flash("Stage failed: " + e));
+    gitApi
+      .stageAll(root)
+      .then(() => refreshGit())
+      .catch((e) => flash("Stage failed: " + e));
   };
   const commit = () => {
     if (!root) return;
@@ -360,14 +364,12 @@ export default function App() {
     const op = isFolder
       ? fsApi.createFolder(root, path)
       : fsApi.createFile(root, path, "# " + name.replace(/\.md$/, "") + "\n\n");
-    op
-      .then(() => {
-        reloadTree();
-        refreshGit();
-        if (!isFolder) openFile(path);
-        flash((isFolder ? "Folder" : "Note") + " created · " + name);
-      })
-      .catch((e) => flash("Create failed: " + e));
+    op.then(() => {
+      reloadTree();
+      refreshGit();
+      if (!isFolder) openFile(path);
+      flash((isFolder ? "Folder" : "Note") + " created · " + name);
+    }).catch((e) => flash("Create failed: " + e));
   };
 
   const ctxAction = (action: ContextAction, node: TreeNode | null) => {
@@ -376,8 +378,8 @@ export default function App() {
       ? node.type === "folder"
         ? node.path
         : node.path.includes("/")
-        ? node.path.slice(0, node.path.lastIndexOf("/"))
-        : ""
+          ? node.path.slice(0, node.path.lastIndexOf("/"))
+          : ""
       : "";
     if (action === "newfile")
       setPrompt({
@@ -421,8 +423,8 @@ export default function App() {
       p === node.path
         ? to
         : node.type === "folder" && p.startsWith(node.path + "/")
-        ? to + p.slice(node.path.length)
-        : p;
+          ? to + p.slice(node.path.length)
+          : p;
     fsApi
       .rename(root, node.path, to)
       .then(() => {
@@ -463,7 +465,12 @@ export default function App() {
       { id: "file.save", label: "File: Save", icon: "check", shortcut: "⌘S" },
       { id: "git.stageAll", label: "Git: Stage All Changes", icon: "plus" },
       { id: "git.push", label: "Git: Push", icon: "upload" },
-      { id: "settings.open", label: "Preferences: Open Settings", icon: "settings", shortcut: "⌘," },
+      {
+        id: "settings.open",
+        label: "Preferences: Open Settings",
+        icon: "settings",
+        shortcut: "⌘,",
+      },
       { id: "theme.slate", label: "Theme: Soft Slate", icon: "eye" },
       { id: "theme.terminal", label: "Theme: True Terminal", icon: "terminal" },
       { id: "theme.warm", label: "Theme: Warm Ink", icon: "book" },
@@ -587,7 +594,7 @@ export default function App() {
     );
 
   const activeVal =
-    active && active !== "__settings__" && active !== "__dashboard__" ? files[active] ?? "" : "";
+    active && active !== "__settings__" && active !== "__dashboard__" ? (files[active] ?? "") : "";
   const isSynced =
     active && active !== "__settings__" && active !== "__dashboard__"
       ? !dirty.has(active) && !git.changes.some((c) => c.path === active)
@@ -608,10 +615,10 @@ export default function App() {
               active === "__settings__"
                 ? "Settings"
                 : active === "__dashboard__"
-                ? "Dashboard"
-                : active
-                ? active.split("/").pop()!.replace(/\.md$/, "")
-                : "";
+                  ? "Dashboard"
+                  : active
+                    ? active.split("/").pop()!.replace(/\.md$/, "")
+                    : "";
             return (
               <>
                 {context && (
@@ -704,7 +711,13 @@ export default function App() {
           <Tabs tabs={tabs} active={active} dirty={dirty} onSelect={setActive} onClose={closeTab} />
           {active === "__settings__" ? (
             <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
-              <Settings s={t} set={setTweak} theme={t.theme} setTheme={(v) => setTweak("theme", v)} folderName={folderName} />
+              <Settings
+                s={t}
+                set={setTweak}
+                theme={t.theme}
+                setTheme={(v) => setTweak("theme", v)}
+                folderName={folderName}
+              />
             </div>
           ) : active === "__dashboard__" ? (
             <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
@@ -745,7 +758,11 @@ export default function App() {
                   />
                 )}
                 {(mode === "preview" || mode === "split") && (
-                  <Preview value={activeVal} onWikilink={openWikilink} single={mode === "preview"} />
+                  <Preview
+                    value={activeVal}
+                    onWikilink={openWikilink}
+                    single={mode === "preview"}
+                  />
                 )}
               </div>
               <StatusBar
@@ -786,7 +803,11 @@ export default function App() {
       </div>
 
       {showTerm && (
-        <Terminal cwd={root} onClose={() => setShowTerm(false)} onToggleMax={() => setTermMax((v) => !v)} />
+        <Terminal
+          cwd={root}
+          onClose={() => setShowTerm(false)}
+          onToggleMax={() => setTermMax((v) => !v)}
+        />
       )}
 
       {palette && (
@@ -800,7 +821,13 @@ export default function App() {
         />
       )}
       {ctx && (
-        <ContextMenu x={ctx.x} y={ctx.y} node={ctx.node} onAction={ctxAction} onClose={() => setCtx(null)} />
+        <ContextMenu
+          x={ctx.x}
+          y={ctx.y}
+          node={ctx.node}
+          onAction={ctxAction}
+          onClose={() => setCtx(null)}
+        />
       )}
       {prompt && <PromptModal {...prompt} onClose={() => setPrompt(null)} />}
       {toast && <div className="toast">{toast}</div>}

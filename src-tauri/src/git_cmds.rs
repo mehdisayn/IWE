@@ -63,8 +63,14 @@ fn numstat(root: &str, cached: bool) -> HashMap<String, (u32, u32)> {
     if let Ok(res) = git(root, &args) {
         for line in res.stdout.lines() {
             let mut parts = line.split('\t');
-            let add = parts.next().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-            let del = parts.next().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+            let add = parts
+                .next()
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(0);
+            let del = parts
+                .next()
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(0);
             if let Some(path) = parts.next() {
                 map.insert(path.to_string(), (add, del));
             }
@@ -213,5 +219,88 @@ pub fn git_log(root: String) -> Result<String, String> {
         Ok(res.stdout)
     } else {
         Err(res.stderr)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn setup_repo() -> String {
+        let n = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("iwe_git_{:?}_{}", std::thread::current().id(), n));
+        fs::create_dir_all(&dir).unwrap();
+        let root = dir.canonicalize().unwrap().to_string_lossy().into_owned();
+        // init + identity so commits succeed in CI-less environments
+        git(&root, &["init", "-q"]).unwrap();
+        git(&root, &["config", "user.email", "test@iwe.app"]).unwrap();
+        git(&root, &["config", "user.name", "IWE Test"]).unwrap();
+        git(&root, &["checkout", "-q", "-b", "main"]).ok();
+        root
+    }
+
+    #[test]
+    fn non_repo_reports_not_a_repo() {
+        let n = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("iwe_nogit_{:?}_{}", std::thread::current().id(), n));
+        fs::create_dir_all(&dir).unwrap();
+        let root = dir.canonicalize().unwrap().to_string_lossy().into_owned();
+        let st = git_status(root.clone()).unwrap();
+        assert!(!st.is_repo);
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn full_status_stage_commit_flow() {
+        let root = setup_repo();
+
+        // First commit so HEAD exists.
+        fs::write(format!("{}/a.md", root), "alpha\n").unwrap();
+        git_stage_all(root.clone()).unwrap();
+        git_commit(root.clone(), "init".into()).unwrap();
+
+        let st = git_status(root.clone()).unwrap();
+        assert!(st.is_repo);
+        assert_eq!(st.branch, "main");
+        assert_eq!(st.changes.len(), 0, "clean tree after commit");
+
+        // Modify a tracked file + add a new untracked one.
+        fs::write(format!("{}/a.md", root), "alpha\nbeta\n").unwrap();
+        fs::write(format!("{}/b.md", root), "new file\n").unwrap();
+
+        let st = git_status(root.clone()).unwrap();
+        let paths: Vec<&str> = st.changes.iter().map(|c| c.path.as_str()).collect();
+        assert!(paths.contains(&"a.md"));
+        assert!(paths.contains(&"b.md"));
+        let a = st.changes.iter().find(|c| c.path == "a.md").unwrap();
+        assert_eq!(a.status, "M");
+        assert!(!a.staged);
+
+        // Stage b.md and confirm it flips to staged.
+        git_stage(root.clone(), "b.md".into()).unwrap();
+        let st = git_status(root.clone()).unwrap();
+        let b = st.changes.iter().find(|c| c.path == "b.md").unwrap();
+        assert!(b.staged, "b.md should be staged");
+
+        // Commit everything, tree goes clean.
+        git_stage_all(root.clone()).unwrap();
+        git_commit(root.clone(), "second".into()).unwrap();
+        let st = git_status(root.clone()).unwrap();
+        assert_eq!(st.changes.len(), 0);
+
+        let log = git_log(root.clone()).unwrap();
+        assert!(log.contains("init") && log.contains("second"));
+
+        fs::remove_dir_all(root).ok();
     }
 }

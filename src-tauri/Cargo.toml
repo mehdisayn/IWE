@@ -2,9 +2,9 @@
 name = "iwe"
 version = "0.1.0"
 description = "IWE — Integrated Writing Environment"
-authors = ["IWE"]
-license = ""
-repository = ""
+authors = ["Mehdi Sayn <m21gits@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/mehdisayn/IWE"
 edition = "2021"
 rust-version = "1.77.2"
 

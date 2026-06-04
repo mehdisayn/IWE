@@ -26,7 +26,11 @@ export function PromptModal({ title, value, confirm, onConfirm, onClose }: Promp
   };
   return (
     <div className="scrim" onMouseDown={onClose}>
-      <div className="palette fade-in" style={{ width: 420 }} onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="palette fade-in"
+        style={{ width: 420 }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div
           className="palette-input-row"
           style={{
@@ -50,10 +54,18 @@ export function PromptModal({ title, value, confirm, onConfirm, onClose }: Promp
             }}
           />
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button className="btn ghost" style={{ flex: "0 0 auto", padding: "8px 16px" }} onClick={onClose}>
+            <button
+              className="btn ghost"
+              style={{ flex: "0 0 auto", padding: "8px 16px" }}
+              onClick={onClose}
+            >
               Cancel
             </button>
-            <button className="btn primary" style={{ flex: "0 0 auto", padding: "8px 18px" }} onClick={go}>
+            <button
+              className="btn primary"
+              style={{ flex: "0 0 auto", padding: "8px 18px" }}
+              onClick={go}
+            >
               {confirm ? "Confirm" : "OK"}
             </button>
           </div>

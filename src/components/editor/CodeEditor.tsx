@@ -19,7 +19,15 @@ interface WikiState {
   sel: number;
 }
 
-export function CodeEditor({ value, onChange, lineNumbers, wordWrap, fileNames, onCaret, taRef }: CodeEditorProps) {
+export function CodeEditor({
+  value,
+  onChange,
+  lineNumbers,
+  wordWrap,
+  fileNames,
+  onCaret,
+  taRef,
+}: CodeEditorProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [wiki, setWiki] = useState<WikiState | null>(null);
   const wrap = !lineNumbers && wordWrap;

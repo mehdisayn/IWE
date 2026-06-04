@@ -14,11 +14,19 @@ export function Tabs({ tabs, active, dirty, onSelect, onClose }: TabsProps) {
       {tabs.map((t) => {
         const isDash = t === "__dashboard__";
         const isSet = t === "__settings__";
-        const name = isDash ? "Dashboard" : isSet ? "Settings" : t.split("/").pop()!.replace(/\.md$/, "");
+        const name = isDash
+          ? "Dashboard"
+          : isSet
+            ? "Settings"
+            : t.split("/").pop()!.replace(/\.md$/, "");
         const ic = isDash ? "grid" : isSet ? "settings" : "md";
         const isDirty = dirty.has(t);
         return (
-          <div key={t} className={"tab" + (t === active ? " active" : "")} onClick={() => onSelect(t)}>
+          <div
+            key={t}
+            className={"tab" + (t === active ? " active" : "")}
+            onClick={() => onSelect(t)}
+          >
             <span className="ti">
               <Icon name={ic} size={14} />
             </span>

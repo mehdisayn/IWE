@@ -38,7 +38,8 @@ function FileRow({ c, isStaged, onOpenFile, onStage, onUnstage }: FileRowProps) 
       </span>
       {(c.add > 0 || c.del > 0) && (
         <span className="stat-num">
-          {c.add > 0 && <span className="a">+{c.add}</span>} {c.del > 0 && <span className="d">−{c.del}</span>}
+          {c.add > 0 && <span className="a">+{c.add}</span>}{" "}
+          {c.del > 0 && <span className="d">−{c.del}</span>}
         </span>
       )}
       <button
@@ -46,7 +47,8 @@ function FileRow({ c, isStaged, onOpenFile, onStage, onUnstage }: FileRowProps) 
         title={isStaged ? "Unstage" : "Stage"}
         onClick={(e) => {
           e.stopPropagation();
-          isStaged ? onUnstage(c.path) : onStage(c.path);
+          if (isStaged) onUnstage(c.path);
+          else onStage(c.path);
         }}
       >
         <Icon name={isStaged ? "x" : "plus"} size={14} />
@@ -111,7 +113,11 @@ export function GitPanel({
               onChange={(e) => setMsg(e.target.value)}
             />
             <div className="commit-actions">
-              <button className="btn primary" disabled={staged.length === 0 || !msg.trim()} onClick={onCommit}>
+              <button
+                className="btn primary"
+                disabled={staged.length === 0 || !msg.trim()}
+                onClick={onCommit}
+              >
                 <Icon name="check" size={15} /> Commit {staged.length ? `(${staged.length})` : ""}
               </button>
               <button className="btn ghost" title="Push" onClick={onPush}>
@@ -128,30 +134,37 @@ export function GitPanel({
               </div>
             )}
             {staged.length > 0 && (
-          <>
-            <div className="git-group-label">
-              Staged Changes <span className="ct">{staged.length}</span>
-            </div>
-            {staged.map((c) => (
-              <FileRow key={c.path} c={c} isStaged onOpenFile={onOpenFile} onStage={onStage} onUnstage={onUnstage} />
-            ))}
-          </>
-        )}
-        {unstaged.length > 0 && (
-          <>
-            <div className="git-group-label">
-              Changes <span className="ct">{unstaged.length}</span>
-            </div>
-            {unstaged.map((c) => (
-              <FileRow
-                key={c.path}
-                c={c}
-                isStaged={false}
-                onOpenFile={onOpenFile}
-                onStage={onStage}
-                onUnstage={onUnstage}
-              />
-            ))}
+              <>
+                <div className="git-group-label">
+                  Staged Changes <span className="ct">{staged.length}</span>
+                </div>
+                {staged.map((c) => (
+                  <FileRow
+                    key={c.path}
+                    c={c}
+                    isStaged
+                    onOpenFile={onOpenFile}
+                    onStage={onStage}
+                    onUnstage={onUnstage}
+                  />
+                ))}
+              </>
+            )}
+            {unstaged.length > 0 && (
+              <>
+                <div className="git-group-label">
+                  Changes <span className="ct">{unstaged.length}</span>
+                </div>
+                {unstaged.map((c) => (
+                  <FileRow
+                    key={c.path}
+                    c={c}
+                    isStaged={false}
+                    onOpenFile={onOpenFile}
+                    onStage={onStage}
+                    onUnstage={onUnstage}
+                  />
+                ))}
               </>
             )}
           </div>
