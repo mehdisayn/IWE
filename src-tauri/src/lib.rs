@@ -1,11 +1,15 @@
+mod config_cmds;
 mod fs_cmds;
 mod git_cmds;
 mod term_cmds;
+mod watch_cmds;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .manage(watch_cmds::WatchState::default())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -19,6 +23,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             fs_cmds::pick_folder,
             fs_cmds::list_dir,
+            fs_cmds::list_subtree,
             fs_cmds::read_file,
             fs_cmds::write_file,
             fs_cmds::create_file,
@@ -34,6 +39,10 @@ pub fn run() {
             git_cmds::git_log,
             term_cmds::run_command,
             term_cmds::change_dir,
+            config_cmds::read_config,
+            config_cmds::write_config,
+            watch_cmds::watch_workspace,
+            watch_cmds::unwatch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

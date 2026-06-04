@@ -17,6 +17,19 @@ All notable changes to IWE are documented here. Format based on
 - Project foundation: MIT `LICENSE`, ESLint + Prettier, rustfmt config, CI workflow,
   issue/PR templates, `CODEOWNERS`.
 - Backend integration tests (filesystem, Git, terminal).
+- Persistence: UI settings, last/recent workspaces, and per-workspace open tabs are
+  saved to an app-config file and restored on launch; recent folders shown on onboarding.
+- Window size/position restored across launches (`tauri-plugin-window-state`).
+- Robustness (M3):
+  - Binary and non-UTF8 files no longer error on open — they show a "binary file"
+    placeholder; files over 5 MB show a "too large" notice instead of loading.
+  - Live filesystem watching (`notify`): external edits, creations, and deletions
+    are reflected automatically; editing a file that changed on disk warns before
+    overwriting unsaved work.
+  - Incremental tree updates (only the changed subfolder is re-listed) and a
+    depth/entry guard so very large or deep folders can't freeze the UI.
+  - Frontend test suite (Vitest + Testing Library) and a top-level React error
+    boundary with a recoverable crash screen.
 
 ### Changed
 

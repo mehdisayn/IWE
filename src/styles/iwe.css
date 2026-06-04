@@ -1585,6 +1585,44 @@ button {
 .ob-skip:hover {
   color: var(--text);
 }
+.ob-recents {
+  margin-top: 22px;
+  text-align: left;
+}
+.ob-recents-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+.ob-recent {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 7px;
+  color: var(--text-2);
+  text-align: left;
+}
+.ob-recent:hover {
+  background: var(--elevated);
+  color: var(--text);
+}
+.ob-recent .nm {
+  color: var(--text);
+  font-weight: 500;
+}
+.ob-recent .pth {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--text-3);
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* misc */
 .kbd {

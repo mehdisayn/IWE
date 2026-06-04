@@ -16,8 +16,52 @@ import { Onboarding } from "./components/overlays/Onboarding";
 import { PromptModal, type PromptConfig } from "./components/overlays/PromptModal";
 import { Dashboard } from "./components/Dashboard";
 import { wordCount } from "./lib/markdown";
-import { IS_TAURI, fsApi, gitApi } from "./lib/tauri";
+import {
+  IS_TAURI,
+  fsApi,
+  gitApi,
+  configApi,
+  watchApi,
+  type PersistedConfig,
+  type Unlisten,
+} from "./lib/tauri";
+import { collectOpenPaths, applyOpen, spliceSubtree, parentDir } from "./lib/tree";
 import type { Caret, EditorMode, FlatFile, GitState, TreeNode, TweakState } from "./types";
+
+// Per-file load status, so binary/oversized files show a placeholder instead of
+// being decoded into the editor.
+interface FileMeta {
+  binary: boolean;
+  tooLarge: boolean;
+  size: number;
+}
+
+function FilePlaceholder({ path, meta }: { path: string; meta: FileMeta }) {
+  const name = path.split("/").pop() || path;
+  const kb = Math.max(1, Math.round(meta.size / 1024));
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: "grid",
+        placeItems: "center",
+        color: "var(--text-3)",
+        padding: 24,
+        textAlign: "center",
+      }}
+    >
+      <div>
+        <div style={{ fontSize: 32, marginBottom: 8 }}>{meta.tooLarge ? "⚖" : "▦"}</div>
+        <div style={{ fontWeight: 600, color: "var(--text-1)" }}>{name}</div>
+        <div style={{ marginTop: 6 }}>
+          {meta.tooLarge
+            ? `File is too large to open in the editor (${kb.toLocaleString()} KB).`
+            : "Binary file — not shown in the text editor."}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function flatten(nodes: TreeNode[], acc: FlatFile[]): FlatFile[] {
   nodes.forEach((n) => {
@@ -53,6 +97,10 @@ export default function App() {
   }, []);
 
   const [onboarded, setOnboarded] = useState(false);
+  // While true (native only), we're loading persisted config before first paint
+  // so we don't flash onboarding when a last workspace will be reopened.
+  const [booting, setBooting] = useState(IS_TAURI);
+  const [recents, setRecents] = useState<string[]>([]);
   // Absolute path of the opened folder. Null until the user opens one — the
   // app shows real on-disk content only, never sample data.
   const [root, setRoot] = useState<string | null>(null);
@@ -62,6 +110,7 @@ export default function App() {
 
   const [files, setFiles] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState<Record<string, string>>({});
+  const [meta, setMeta] = useState<Record<string, FileMeta>>({});
   const [tabs, setTabs] = useState<string[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [mode, setMode] = useState<EditorMode>("split");
@@ -89,10 +138,24 @@ export default function App() {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const toastTimer = useRef<number | null>(null);
 
+  // Persistence: cfgRef is the in-memory source of truth, flushed to disk
+  // (debounced) by scheduleSave. loadedRef gates saves until initial load.
+  const cfgRef = useRef<PersistedConfig>({});
+  const loadedRef = useRef(!IS_TAURI);
+  const saveTimer = useRef<number | null>(null);
+
   const flash = useCallback((m: string) => {
     setToast(m);
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), 1900);
+  }, []);
+
+  const scheduleSave = useCallback(() => {
+    if (!IS_TAURI || !loadedRef.current) return;
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      configApi.save(cfgRef.current);
+    }, 400);
   }, []);
 
   // Pull live git state from disk. No-op in the browser mock.
@@ -117,48 +180,79 @@ export default function App() {
   const reloadTree = useCallback(
     (r: string | null = root) => {
       if (!r) return;
-      const openPaths = new Set<string>();
-      const collect = (nodes: TreeNode[]) =>
-        nodes.forEach((n) => {
-          if (n.type === "folder") {
-            if (n.open) openPaths.add(n.path);
-            collect(n.children);
-          }
-        });
-      collect(tree);
-      const applyOpen = (nodes: TreeNode[]): TreeNode[] =>
-        nodes.map((n) =>
-          n.type === "folder"
-            ? { ...n, open: openPaths.has(n.path), children: applyOpen(n.children) }
-            : n
-        );
+      const openPaths = collectOpenPaths(tree);
       fsApi
         .listDir(r)
-        .then((t) => setTree(applyOpen(t)))
+        .then((t) => setTree(applyOpen(t, openPaths)))
         .catch((e) => flash("Reload failed: " + e));
     },
     [root, tree, flash]
+  );
+
+  // Load a file's contents from disk into state, recording its binary/oversize
+  // status so the editor can show a placeholder instead of garbage.
+  const loadFile = useCallback(
+    (r: string, path: string) =>
+      fsApi.readFile(r, path).then((fc) => {
+        setMeta((m) => ({
+          ...m,
+          [path]: { binary: fc.binary, tooLarge: fc.tooLarge, size: fc.size },
+        }));
+        if (!fc.binary && !fc.tooLarge) {
+          setFiles((f) => ({ ...f, [path]: fc.content }));
+          setSaved((s) => ({ ...s, [path]: fc.content }));
+        }
+      }),
+    []
   );
 
   // Open a real folder as the workspace (native only).
   const openWorkspace = useCallback(
     async (abs: string) => {
       try {
-        const t = await fsApi.listDir(abs);
+        const tr = await fsApi.listDir(abs);
         setRoot(abs);
         setFolderName(abs.split("/").filter(Boolean).pop() || abs);
-        setTree(t);
+        setTree(tr);
         setFiles({});
         setSaved({});
-        setTabs([]);
-        setActive(null);
+        setMeta({});
+
+        // Watch the workspace so external changes (other editors, git, scripts)
+        // are reflected live. Replaces any previous watcher in the backend.
+        watchApi.watch(abs);
+
+        // Restore previously open tabs for this workspace, if any.
+        const ws = cfgRef.current.workspaces?.[abs];
+        if (ws && ws.tabs.length) {
+          setTabs(ws.tabs);
+          const act = ws.active && ws.tabs.includes(ws.active) ? ws.active : ws.tabs[0];
+          setActive(act);
+          if (act && !act.startsWith("__")) {
+            loadFile(abs, act).catch(() => {});
+          }
+        } else {
+          setTabs([]);
+          setActive(null);
+        }
+
+        // Record as the last + recent workspace.
+        const rec = [
+          abs,
+          ...(cfgRef.current.recentWorkspaces || []).filter((p) => p !== abs),
+        ].slice(0, 8);
+        cfgRef.current.recentWorkspaces = rec;
+        cfgRef.current.lastWorkspace = abs;
+        setRecents(rec);
+        scheduleSave();
+
         refreshGit(abs);
         flash("Opened " + (abs.split("/").pop() || abs));
       } catch (e) {
         flash("Open failed: " + e);
       }
     },
-    [refreshGit, flash]
+    [refreshGit, flash, scheduleSave, loadFile]
   );
 
   const pickFolder = useCallback(async () => {
@@ -171,6 +265,44 @@ export default function App() {
       return null;
     }
   }, [openWorkspace, flash]);
+
+  // Load persisted config once on startup and reopen the last workspace.
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    let cancelled = false;
+    configApi.load().then((cfg) => {
+      if (cancelled) return;
+      cfgRef.current = cfg;
+      if (cfg.settings) setTweakState((p) => ({ ...p, ...cfg.settings }));
+      setRecents(cfg.recentWorkspaces || []);
+      loadedRef.current = true;
+      if (cfg.lastWorkspace) {
+        openWorkspace(cfg.lastWorkspace)
+          .then(() => setOnboarded(true))
+          .finally(() => setBooting(false));
+      } else {
+        setBooting(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist UI settings whenever they change.
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    cfgRef.current.settings = t;
+    scheduleSave();
+  }, [t, scheduleSave]);
+
+  // Persist open tabs + active file per workspace.
+  useEffect(() => {
+    if (!loadedRef.current || !root) return;
+    cfgRef.current.workspaces = { ...(cfgRef.current.workspaces || {}), [root]: { tabs, active } };
+    scheduleSave();
+  }, [tabs, active, root, scheduleSave]);
 
   useEffect(() => {
     const el = document.querySelector<HTMLDivElement>(".app");
@@ -197,20 +329,15 @@ export default function App() {
   const openFile = useCallback(
     (path: string) => {
       if (!root) return;
-      // Lazy-load from disk the first time a file is opened.
-      if (files[path] == null) {
-        fsApi
-          .readFile(root, path)
-          .then((content) => {
-            setFiles((f) => ({ ...f, [path]: content }));
-            setSaved((s) => ({ ...s, [path]: content }));
-          })
-          .catch((e) => flash("Open failed: " + e));
+      // Lazy-load from disk the first time a file is opened (meta tracks
+      // binary/oversized files that never enter `files`).
+      if (files[path] == null && meta[path] == null) {
+        loadFile(root, path).catch((e) => flash("Open failed: " + e));
       }
       setActive(path);
       setTabs((tb) => (tb.includes(path) ? tb : [path, ...tb]));
     },
-    [root, files, flash]
+    [root, files, meta, loadFile, flash]
   );
 
   const toggleFolder = (path: string) => {
@@ -233,6 +360,103 @@ export default function App() {
     return s;
   }, [files, saved]);
 
+  // Latest values for the fs-watch listener, which is registered once and must
+  // not close over stale state.
+  const rootRef = useRef(root);
+  rootRef.current = root;
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+
+  // Reconcile the app with external on-disk changes. Updates only the affected
+  // subtrees (incremental) and re-reads open files, warning before clobbering
+  // unsaved edits.
+  const applyFsChanges = useCallback(
+    async (r: string, changed: string[]) => {
+      const parents = Array.from(new Set(changed.map(parentDir)));
+      if (parents.includes("")) {
+        // A top-level entry changed — a full reload is the simplest correct refresh.
+        reloadTree(r);
+      } else {
+        for (const sub of parents) {
+          try {
+            const children = await fsApi.listSubtree(r, sub);
+            setTree((prev) => {
+              const spliced = spliceSubtree(prev, sub, children);
+              return spliced ? applyOpen(spliced, collectOpenPaths(prev)) : prev;
+            });
+          } catch {
+            reloadTree(r);
+            break;
+          }
+        }
+      }
+      refreshGit(r);
+
+      // Reflect external edits to open files.
+      changed.forEach((p) => {
+        if (!tabsRef.current.includes(p)) return;
+        const wasDirty = dirtyRef.current.has(p);
+        fsApi
+          .readFile(r, p)
+          .then((fc) => {
+            setMeta((m) => ({
+              ...m,
+              [p]: { binary: fc.binary, tooLarge: fc.tooLarge, size: fc.size },
+            }));
+            if (fc.binary || fc.tooLarge) return;
+            setSaved((s) => {
+              if (s[p] === fc.content) return s; // no real change
+              if (wasDirty) {
+                flash("⚠ " + (p.split("/").pop() || p) + " changed on disk");
+                return s; // keep the user's unsaved edits
+              }
+              setFiles((f) => ({ ...f, [p]: fc.content }));
+              return { ...s, [p]: fc.content };
+            });
+          })
+          .catch(() => {
+            /* likely deleted — the tree update above handles removal */
+          });
+      });
+    },
+    [reloadTree, refreshGit, flash]
+  );
+  const applyFsRef = useRef(applyFsChanges);
+  applyFsRef.current = applyFsChanges;
+
+  // Subscribe to backend fs:changed events once, batching bursts (e.g. a git
+  // checkout touching many files) into a single debounced reconcile.
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    let un: Unlisten | undefined;
+    let disposed = false;
+    const pending = new Set<string>();
+    let timer: number | undefined;
+    const flush = () => {
+      const r = rootRef.current;
+      const batch = Array.from(pending);
+      pending.clear();
+      if (r && batch.length) applyFsRef.current(r, batch);
+    };
+    watchApi
+      .onChange((paths) => {
+        paths.forEach((p) => pending.add(p));
+        if (timer) window.clearTimeout(timer);
+        timer = window.setTimeout(flush, 250);
+      })
+      .then((u) => {
+        if (disposed) u();
+        else un = u;
+      });
+    return () => {
+      disposed = true;
+      if (un) un();
+      if (timer) window.clearTimeout(timer);
+    };
+  }, []);
+
   const editActive = (val: string) => {
     if (!active || active === "__settings__" || active === "__dashboard__") return;
     setFiles((f) => ({ ...f, [active]: val }));
@@ -240,6 +464,7 @@ export default function App() {
 
   const saveActive = useCallback(() => {
     if (!root || !active || active === "__settings__" || active === "__dashboard__") return;
+    if (meta[active]?.binary || meta[active]?.tooLarge) return; // not editable
     if (files[active] === saved[active]) {
       flash("Already saved");
       return;
@@ -263,7 +488,7 @@ export default function App() {
         }
       })
       .catch((e) => flash("Save failed: " + e));
-  }, [active, files, saved, flash, root, refreshGit, t.commitOnSave, git.branch]);
+  }, [active, files, saved, meta, flash, root, refreshGit, t.commitOnSave, git.branch]);
 
   useEffect(() => {
     if (!t.autosave || !root) return;
@@ -578,9 +803,15 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saveActive]);
 
+  if (booting) return <div className="onboard" />;
+
   if (!onboarded)
     return (
       <Onboarding
+        recents={recents}
+        onOpenRecent={(p) => {
+          openWorkspace(p).then(() => setOnboarded(true));
+        }}
         onOpenFolder={
           IS_TAURI
             ? () => {
@@ -742,6 +973,8 @@ export default function App() {
                 }}
               />
             </div>
+          ) : active && (meta[active]?.binary || meta[active]?.tooLarge) ? (
+            <FilePlaceholder path={active} meta={meta[active]} />
           ) : active ? (
             <>
               <EditorToolbar path={active} mode={mode} setMode={setMode} />

@@ -2,7 +2,7 @@
 // (vs a plain browser via `npm run dev`) so the UI can degrade gracefully when
 // there's no native shell (no filesystem/git access).
 
-import type { TreeNode } from "../types";
+import type { TreeNode, TweakState } from "../types";
 
 interface TauriWindow {
   __TAURI_INTERNALS__?: unknown;
@@ -24,10 +24,20 @@ async function invoke<T = unknown>(cmd: string, args?: Record<string, unknown>):
   return _invoke<T>(cmd, args);
 }
 
+// Result of reading a file. Binary / oversized files come back flagged with
+// empty content so the UI can show a placeholder instead of garbage.
+export interface FileContents {
+  binary: boolean;
+  tooLarge: boolean;
+  size: number;
+  content: string;
+}
+
 export const fsApi = {
   pickFolder: () => invoke<string | null>("pick_folder"),
   listDir: (root: string) => invoke<TreeNode[]>("list_dir", { root }),
-  readFile: (root: string, path: string) => invoke<string>("read_file", { root, path }),
+  listSubtree: (root: string, sub: string) => invoke<TreeNode[]>("list_subtree", { root, sub }),
+  readFile: (root: string, path: string) => invoke<FileContents>("read_file", { root, path }),
   writeFile: (root: string, path: string, content: string) =>
     invoke<void>("write_file", { root, path, content }),
   createFile: (root: string, path: string, content = "") =>
@@ -71,4 +81,51 @@ export interface CommandOutput {
 export const termApi = {
   run: (cwd: string, command: string) => invoke<CommandOutput>("run_command", { cwd, command }),
   changeDir: (cwd: string, target: string) => invoke<string>("change_dir", { cwd, target }),
+};
+
+// Filesystem watching: the backend emits `fs:changed` with the paths (relative
+// to the workspace root) that changed on disk. `onChange` resolves to an
+// unsubscribe function. All calls are no-ops outside Tauri.
+export type Unlisten = () => void;
+
+export const watchApi = {
+  watch: (path: string): Promise<void> =>
+    IS_TAURI ? invoke<void>("watch_workspace", { path }).catch(() => {}) : Promise.resolve(),
+  unwatch: (): Promise<void> =>
+    IS_TAURI ? invoke<void>("unwatch").catch(() => {}) : Promise.resolve(),
+  onChange: async (cb: (paths: string[]) => void): Promise<Unlisten> => {
+    if (!IS_TAURI) return () => {};
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<{ paths: string[] }>("fs:changed", (e) => cb(e.payload.paths));
+  },
+};
+
+// Per-workspace tab state restored on reopen.
+export interface WorkspaceState {
+  tabs: string[];
+  active: string | null;
+}
+
+// The single persisted config blob (app-config dir / config.json).
+export interface PersistedConfig {
+  settings?: Partial<TweakState>;
+  lastWorkspace?: string | null;
+  recentWorkspaces?: string[];
+  workspaces?: Record<string, WorkspaceState>;
+}
+
+export const configApi = {
+  load: async (): Promise<PersistedConfig> => {
+    if (!IS_TAURI) return {};
+    try {
+      const raw = await invoke<string>("read_config");
+      return raw ? (JSON.parse(raw) as PersistedConfig) : {};
+    } catch {
+      return {};
+    }
+  },
+  save: (cfg: PersistedConfig): Promise<void> => {
+    if (!IS_TAURI) return Promise.resolve();
+    return invoke<void>("write_config", { content: JSON.stringify(cfg, null, 2) }).catch(() => {});
+  },
 };

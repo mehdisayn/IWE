@@ -26,18 +26,18 @@ Path from working MVP to a signed public **1.0**. Mirrors the tracked task list 
 - [x] 🚫 **#13** CI workflow `ci.yml`: build · typecheck · lint · `cargo fmt`/`clippy -Dwarnings`/`test` (macOS + Ubuntu)
 - [x] ⭐ **#14** ESLint + Prettier + rustfmt, `CHANGELOG.md`, issue/PR templates, `CODEOWNERS`
 
-## M2 — Persistence & session UX
+## M2 — Persistence & session UX ✅
 
-- [ ] ⭐ **#15** Persist app settings (theme/fonts/toggles) to disk
-- [ ] ⭐ **#16** Reopen last workspace on launch + "Recent folders" on onboarding
-- [ ] ✨ **#17** Persist window size/position and open tabs per workspace
+- [x] ⭐ **#15** Persist app settings (theme/fonts/toggles) to disk (`config.json` in app-config dir)
+- [x] ⭐ **#16** Reopen last workspace on launch + "Recent folders" on onboarding
+- [x] ✨ **#17** Persist window size/position (`tauri-plugin-window-state`) and open tabs per workspace
 
-## M3 — Robustness & data integrity
+## M3 — Robustness & data integrity ✅
 
-- [ ] ⭐ **#18** Graceful binary/non-UTF8 file handling (no crash on open)
-- [ ] ⭐ **#19** Filesystem watching (`notify`) + external-change / overwrite-conflict handling
-- [ ] 🔧 **#20** Incremental tree updates + large-folder depth/size guard
-- [ ] 🔧 **#21** Frontend tests (Vitest + Testing Library) + React error boundary
+- [x] ⭐ **#18** Graceful binary/non-UTF8 file handling (no crash on open)
+- [x] ⭐ **#19** Filesystem watching (`notify`) + external-change / overwrite-conflict handling
+- [x] 🔧 **#20** Incremental tree updates + large-folder depth/size guard
+- [x] 🔧 **#21** Frontend tests (Vitest + Testing Library) + React error boundary
 
 ## M4 — Terminal & Git completeness
 

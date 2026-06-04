@@ -13,6 +13,8 @@ export interface FolderNode {
   path: string;
   open: boolean;
   children: TreeNode[];
+  /** Set by the backend when the listing under this folder was capped (depth/size guard). */
+  truncated?: boolean;
 }
 
 export type TreeNode = FileNode | FolderNode;

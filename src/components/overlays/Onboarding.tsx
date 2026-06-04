@@ -3,9 +3,11 @@ import { Icon } from "../Icon";
 interface OnboardingProps {
   // Native folder picker. Undefined when not running as the desktop app.
   onOpenFolder?: () => void;
+  recents?: string[];
+  onOpenRecent?: (path: string) => void;
 }
 
-export function Onboarding({ onOpenFolder }: OnboardingProps) {
+export function Onboarding({ onOpenFolder, recents = [], onOpenRecent }: OnboardingProps) {
   return (
     <div className="onboard fade-in">
       <div className="onboard-card">
@@ -28,6 +30,18 @@ export function Onboarding({ onOpenFolder }: OnboardingProps) {
                 <span className="t">Open Folder…</span>
               </button>
             </div>
+            {recents.length > 0 && onOpenRecent && (
+              <div className="ob-recents">
+                <div className="ob-recents-label">Recent</div>
+                {recents.slice(0, 5).map((p) => (
+                  <button key={p} className="ob-recent" onClick={() => onOpenRecent(p)} title={p}>
+                    <Icon name="folder" size={15} />
+                    <span className="nm">{p.split("/").filter(Boolean).pop() || p}</span>
+                    <span className="pth">{p.replace(/\/[^/]+\/?$/, "")}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="ob-skip" style={{ cursor: "default" }}>
               Your files stay on disk. Git uses the repository in the folder you open.
             </div>
