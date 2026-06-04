@@ -114,6 +114,29 @@ export const watchApi = {
   },
 };
 
+// Interactive PTY terminal. Output arrives on `pty:data` events keyed by the
+// session `id`; `onExit` fires when the shell ends.
+export const ptyApi = {
+  spawn: (id: string, cwd: string, cols: number, rows: number) =>
+    invoke<void>("pty_spawn", { id, cwd, cols, rows }),
+  write: (id: string, data: string) => invoke<void>("pty_write", { id, data }),
+  resize: (id: string, cols: number, rows: number) =>
+    invoke<void>("pty_resize", { id, cols, rows }),
+  kill: (id: string) => invoke<void>("pty_kill", { id }).catch(() => {}),
+  onData: async (cb: (id: string, data: string) => void): Promise<Unlisten> => {
+    if (!IS_TAURI) return () => {};
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<{ id: string; data: string }>("pty:data", (e) =>
+      cb(e.payload.id, e.payload.data)
+    );
+  },
+  onExit: async (cb: (id: string) => void): Promise<Unlisten> => {
+    if (!IS_TAURI) return () => {};
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<{ id: string }>("pty:exit", (e) => cb(e.payload.id));
+  },
+};
+
 // Misc native helpers and the native-menu event bridge.
 export const miscApi = {
   openExternal: (url: string): Promise<void> => {

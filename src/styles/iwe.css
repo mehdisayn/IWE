@@ -1351,6 +1351,29 @@ button {
   line-height: 1.6;
   color: var(--text);
 }
+/* xterm.js host: the holder fills the body; xterm manages its own scrollback. */
+.term-body-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 6px 4px 6px 10px;
+}
+.xterm-holder {
+  position: absolute;
+  inset: 6px 4px 6px 10px;
+}
+.term-body-wrap .xterm,
+.term-body-wrap .xterm-viewport {
+  background: transparent !important;
+}
+.term-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
 .term-line {
   white-space: pre-wrap;
   word-break: break-word;

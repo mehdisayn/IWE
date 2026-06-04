@@ -1,54 +1,9 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Terminal as XTerm } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import "@xterm/xterm/css/xterm.css";
 import { Icon } from "./Icon";
-import { termApi } from "../lib/tauri";
-
-// Strip ANSI escape sequences so raw CLI color codes don't leak into the DOM.
-// eslint-disable-next-line no-control-regex
-const ANSI = /\[[0-9;]*m/g;
-
-interface LineProps {
-  children: ReactNode;
-  cls?: string;
-}
-
-function Line({ children, cls }: LineProps) {
-  return <div className={"term-line" + (cls ? " " + cls : "")}>{children}</div>;
-}
-
-function textToLines(text: string, cls?: string): ReactNode[] {
-  if (!text) return [];
-  return text
-    .replace(ANSI, "")
-    .replace(/\n$/, "")
-    .split("\n")
-    .map((l, i) => (
-      <Line key={i} cls={cls}>
-        {l || " "}
-      </Line>
-    ));
-}
-
-// Show a compact, shell-like label for the current directory.
-function shortPath(abs: string): string {
-  const parts = abs.split("/").filter(Boolean);
-  if (parts.length === 0) return "/";
-  return "~/…/" + parts[parts.length - 1];
-}
-
-function Prompt({ path, busy }: { path: string; busy?: boolean }) {
-  return (
-    <>
-      <span className="pr">{busy ? "…" : "➜"}</span> <span className="pth">{path}</span>{" "}
-    </>
-  );
-}
-
-interface Session {
-  id: number;
-  name: string;
-  lines: ReactNode[];
-  cwd: string;
-}
+import { IS_TAURI, ptyApi } from "../lib/tauri";
 
 interface TerminalProps {
   cwd?: string | null;
@@ -56,117 +11,166 @@ interface TerminalProps {
   onToggleMax: () => void;
 }
 
-export function Terminal({ cwd, onClose, onToggleMax }: TerminalProps) {
-  const hasFolder = !!cwd;
-  const startCwd = cwd || "";
+type Register = (id: string, write: (d: string) => void, exit: () => void) => void;
 
-  const makeSeed = (dir: string): ReactNode[] => [
-    <Line cls="muted">IWE terminal · {shortPath(dir)} · runs real commands in this folder</Line>,
-  ];
+interface PtyViewProps {
+  ptyId: string;
+  cwd: string;
+  visible: boolean;
+  register: Register;
+  unregister: (id: string) => void;
+}
 
-  const [sessions, setSessions] = useState<Session[]>([
-    { id: 1, name: "zsh", lines: hasFolder ? makeSeed(startCwd) : [], cwd: startCwd },
-  ]);
-  const [active, setActive] = useState(1);
-  const [input, setInput] = useState("");
-  const [history, setHistory] = useState<string[]>([]);
-  const [hIdx, setHIdx] = useState(-1);
-  const [busy, setBusy] = useState(false);
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const inRef = useRef<HTMLInputElement>(null);
-  const sess = sessions.find((s) => s.id === active);
+// One xterm.js instance bound to one backend PTY session. Kept mounted while its
+// tab exists (hidden when inactive) so scrollback and shell state survive tab
+// switches.
+function PtyView({ ptyId, cwd, visible, register, unregister }: PtyViewProps) {
+  const holder = useRef<HTMLDivElement>(null);
+  const termRef = useRef<XTerm | null>(null);
+  const fitRef = useRef<FitAddon | null>(null);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
 
   useEffect(() => {
-    if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-  }, [sessions, active]);
-
-  const appendLines = (id: number, nodes: ReactNode[]) =>
-    setSessions((ss) => ss.map((s) => (s.id === id ? { ...s, lines: [...s.lines, ...nodes] } : s)));
-
-  const submit = async () => {
-    if (!hasFolder || busy) return;
-    const cmd = input;
-    const cur = sessions.find((s) => s.id === active);
-    const sessionCwd = cur?.cwd || startCwd;
-    const echo = (
-      <Line>
-        <Prompt path={shortPath(sessionCwd)} />
-        <span>{cmd}</span>
-      </Line>
-    );
-    if (cmd.trim()) setHistory((h) => [...h, cmd]);
-    setHIdx(-1);
-    setInput("");
-
-    const trimmed = cmd.trim();
-    if (trimmed === "clear") {
-      setSessions((ss) => ss.map((s) => (s.id === active ? { ...s, lines: [] } : s)));
-      return;
-    }
-    appendLines(active, [echo]);
-    if (!trimmed) return;
-
-    if (trimmed === "cd" || trimmed.startsWith("cd ")) {
-      const target = trimmed === "cd" ? "" : trimmed.slice(3).trim();
-      try {
-        const next = await termApi.changeDir(sessionCwd, target);
-        setSessions((ss) => ss.map((s) => (s.id === active ? { ...s, cwd: next } : s)));
-      } catch (e) {
-        appendLines(active, [<Line cls="err">{String(e)}</Line>]);
-      }
-      return;
-    }
-
-    setBusy(true);
+    const el = holder.current;
+    if (!el) return;
+    const term = new XTerm({
+      fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+      fontSize: 12.5,
+      cursorBlink: true,
+      allowTransparency: true,
+      theme: {
+        background: "rgba(0,0,0,0)",
+        foreground: "#d6d6da",
+        cursor: "#d6d6da",
+        selectionBackground: "rgba(255,255,255,0.18)",
+      },
+      scrollback: 5000,
+    });
+    const fit = new FitAddon();
+    term.loadAddon(fit);
+    term.open(el);
+    termRef.current = term;
+    fitRef.current = fit;
     try {
-      const out = await termApi.run(sessionCwd, cmd);
-      appendLines(active, [...textToLines(out.stdout), ...textToLines(out.stderr, "err")]);
-    } catch (e) {
-      appendLines(active, [<Line cls="err">{String(e)}</Line>]);
-    } finally {
-      setBusy(false);
+      fit.fit();
+    } catch {
+      /* element not laid out yet */
     }
-  };
 
-  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      submit();
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      const ni = hIdx < 0 ? history.length - 1 : Math.max(0, hIdx - 1);
-      if (history[ni] != null) {
-        setHIdx(ni);
-        setInput(history[ni]);
+    term.onData((d) => ptyApi.write(ptyId, d));
+    register(
+      ptyId,
+      (d) => term.write(d),
+      () => term.write("\r\n\x1b[2m[process exited]\x1b[0m\r\n")
+    );
+
+    ptyApi
+      .spawn(ptyId, cwd, term.cols || 80, term.rows || 24)
+      .then(() => {
+        if (visibleRef.current) term.focus();
+      })
+      .catch((e) => term.writeln("Failed to start shell: " + String(e)));
+
+    const ro = new ResizeObserver(() => {
+      if (!visibleRef.current) return;
+      try {
+        fit.fit();
+        ptyApi.resize(ptyId, term.cols, term.rows);
+      } catch {
+        /* ignore transient layout errors */
       }
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      if (hIdx < 0) return;
-      const ni = hIdx + 1;
-      if (ni >= history.length) {
-        setHIdx(-1);
-        setInput("");
-      } else {
-        setHIdx(ni);
-        setInput(history[ni]);
+    });
+    ro.observe(el);
+
+    return () => {
+      ro.disconnect();
+      unregister(ptyId);
+      ptyApi.kill(ptyId);
+      term.dispose();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Refit + refocus when this tab becomes active (its size was 0 while hidden).
+  useEffect(() => {
+    if (!visible) return;
+    const term = termRef.current;
+    const fit = fitRef.current;
+    if (!term || !fit) return;
+    const raf = requestAnimationFrame(() => {
+      try {
+        fit.fit();
+        ptyApi.resize(ptyId, term.cols, term.rows);
+        term.focus();
+      } catch {
+        /* ignore */
       }
-    } else if (e.key === "l" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      setSessions((ss) => ss.map((s) => (s.id === active ? { ...s, lines: [] } : s)));
-    }
-  };
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [visible, ptyId]);
+
+  return (
+    <div ref={holder} className="xterm-holder" style={{ display: visible ? "block" : "none" }} />
+  );
+}
+
+const newPtyId = (): string =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : "pty-" + Math.random().toString(36).slice(2) + Date.now();
+
+export function Terminal({ cwd, onClose, onToggleMax }: TerminalProps) {
+  const hasFolder = !!cwd && IS_TAURI;
+  const [sessions, setSessions] = useState<{ id: number; ptyId: string }[]>(() =>
+    hasFolder ? [{ id: 1, ptyId: newPtyId() }] : []
+  );
+  const [active, setActive] = useState(1);
+
+  // Route backend pty events to the right xterm instance.
+  const sinks = useRef(new Map<string, (d: string) => void>());
+  const exits = useRef(new Map<string, () => void>());
+  const register = useCallback<Register>((id, write, exit) => {
+    sinks.current.set(id, write);
+    exits.current.set(id, exit);
+  }, []);
+  const unregister = useCallback((id: string) => {
+    sinks.current.delete(id);
+    exits.current.delete(id);
+  }, []);
+
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    let unData: (() => void) | undefined;
+    let unExit: (() => void) | undefined;
+    let disposed = false;
+    ptyApi
+      .onData((id, data) => sinks.current.get(id)?.(data))
+      .then((u) => {
+        if (disposed) u();
+        else unData = u;
+      });
+    ptyApi
+      .onExit((id) => exits.current.get(id)?.())
+      .then((u) => {
+        if (disposed) u();
+        else unExit = u;
+      });
+    return () => {
+      disposed = true;
+      unData?.();
+      unExit?.();
+    };
+  }, []);
 
   const addSession = () => {
-    const id = Math.max(...sessions.map((s) => s.id)) + 1;
-    setSessions([
-      ...sessions,
-      { id, name: "zsh", cwd: startCwd, lines: hasFolder ? makeSeed(startCwd) : [] },
-    ]);
+    const id = sessions.length ? Math.max(...sessions.map((s) => s.id)) + 1 : 1;
+    setSessions((ss) => [...ss, { id, ptyId: newPtyId() }]);
     setActive(id);
   };
 
   const closeSession = (id: number) => {
-    if (sessions.length === 1) {
+    if (sessions.length <= 1) {
       onClose();
       return;
     }
@@ -180,16 +184,15 @@ export function Terminal({ cwd, onClose, onToggleMax }: TerminalProps) {
       <div className="term-tabs">
         {sessions.map((s) => (
           <div
-            key={s.id}
+            key={s.ptyId}
             className={"term-tab" + (s.id === active ? " active" : "")}
             onClick={() => setActive(s.id)}
           >
             <span className="tdot" />
-            <span>
-              {s.id}: {s.name}
-            </span>
+            <span>{s.id}: shell</span>
             <button
               className="x"
+              aria-label="Close terminal"
               onClick={(e) => {
                 e.stopPropagation();
                 closeSession(s.id);
@@ -200,44 +203,51 @@ export function Terminal({ cwd, onClose, onToggleMax }: TerminalProps) {
           </div>
         ))}
         <div className="term-actions">
-          <button className="icon-btn" title="New terminal" onClick={addSession}>
+          <button
+            className="icon-btn"
+            title="New terminal"
+            aria-label="New terminal"
+            onClick={addSession}
+            disabled={!hasFolder}
+          >
             <Icon name="plus" size={14} />
           </button>
-          <button className="icon-btn" title="Maximize" onClick={onToggleMax}>
+          <button
+            className="icon-btn"
+            title="Maximize"
+            aria-label="Maximize terminal"
+            onClick={onToggleMax}
+          >
             <Icon name="split" size={13} />
           </button>
-          <button className="icon-btn" title="Close panel (⌘`)" onClick={onClose}>
+          <button
+            className="icon-btn"
+            title="Close panel (⌘`)"
+            aria-label="Close terminal panel"
+            onClick={onClose}
+          >
             <Icon name="x" size={14} />
           </button>
         </div>
       </div>
-      <div
-        className="term-body"
-        ref={bodyRef}
-        onClick={() => inRef.current && inRef.current.focus()}
-      >
+      <div className="term-body-wrap">
         {!hasFolder ? (
-          <Line cls="muted">Open a folder to use the terminal.</Line>
+          <div className="term-empty">
+            {IS_TAURI
+              ? "Open a folder to use the terminal."
+              : "Terminal requires the IWE desktop app."}
+          </div>
         ) : (
-          <>
-            {sess?.lines.map((l, i) => (
-              <Fragment key={i}>{l}</Fragment>
-            ))}
-            <div className="term-input-row">
-              <span className="pr">{busy ? "…" : "➜"}</span>
-              <span className="pth">{sess ? shortPath(sess.cwd) : ""}</span>
-              <input
-                ref={inRef}
-                className="term-input"
-                value={input}
-                autoFocus
-                spellCheck={false}
-                disabled={busy}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={onKey}
-              />
-            </div>
-          </>
+          sessions.map((s) => (
+            <PtyView
+              key={s.ptyId}
+              ptyId={s.ptyId}
+              cwd={cwd as string}
+              visible={s.id === active}
+              register={register}
+              unregister={unregister}
+            />
+          ))
         )}
       </div>
     </div>

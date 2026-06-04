@@ -2,6 +2,7 @@ mod config_cmds;
 mod fs_cmds;
 mod git_cmds;
 mod menu;
+mod pty_cmds;
 mod term_cmds;
 mod watch_cmds;
 
@@ -11,6 +12,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(watch_cmds::WatchState::default())
+        .manage(pty_cmds::PtyState::default())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -54,6 +56,10 @@ pub fn run() {
             watch_cmds::watch_workspace,
             watch_cmds::unwatch,
             menu::open_external,
+            pty_cmds::pty_spawn,
+            pty_cmds::pty_write,
+            pty_cmds::pty_resize,
+            pty_cmds::pty_kill,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
