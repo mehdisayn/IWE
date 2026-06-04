@@ -16,6 +16,7 @@ import { Onboarding } from "./components/overlays/Onboarding";
 import { PromptModal, type PromptConfig } from "./components/overlays/PromptModal";
 import { DiffModal, type DiffData } from "./components/overlays/DiffModal";
 import { About } from "./components/overlays/About";
+import { GitHubSignIn } from "./components/overlays/GitHubSignIn";
 import { Dashboard } from "./components/Dashboard";
 import { wordCount } from "./lib/markdown";
 import {
@@ -25,6 +26,7 @@ import {
   configApi,
   watchApi,
   miscApi,
+  authApi,
   type PersistedConfig,
   type Unlisten,
 } from "./lib/tauri";
@@ -147,6 +149,8 @@ export default function App() {
   const [commitMsg, setCommitMsg] = useState("");
   const [diff, setDiff] = useState<DiffData | null>(null);
   const [about, setAbout] = useState(false);
+  const [signin, setSignin] = useState(false);
+  const [signinAvailable, setSigninAvailable] = useState(false);
 
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; node: TreeNode | null } | null>(null);
@@ -505,6 +509,14 @@ export default function App() {
     };
   }, []);
 
+  // Is GitHub push sign-in configured in this build? Gates the palette command.
+  useEffect(() => {
+    authApi
+      .available()
+      .then(setSigninAvailable)
+      .catch(() => {});
+  }, []);
+
   const editActive = (val: string) => {
     if (!active || active === "__settings__" || active === "__dashboard__") return;
     setFiles((f) => ({ ...f, [active]: val }));
@@ -809,9 +821,12 @@ export default function App() {
       { id: "theme.slate", label: "Theme: Soft Slate", icon: "eye" },
       { id: "theme.terminal", label: "Theme: True Terminal", icon: "terminal" },
       { id: "theme.warm", label: "Theme: Warm Ink", icon: "book" },
+      ...(signinAvailable
+        ? [{ id: "github.signin", label: "GitHub: Sign in (push)", icon: "github" }]
+        : []),
       { id: "help.about", label: "Help: About IWE", icon: "git" },
     ],
-    []
+    [signinAvailable]
   );
 
   const openSettings = () => {
@@ -857,6 +872,7 @@ export default function App() {
     } else if (id === "git.push") push();
     else if (id === "settings.open") openSettings();
     else if (id === "help.about") setAbout(true);
+    else if (id === "github.signin") setSignin(true);
     else if (id.startsWith("theme.")) setTweak("theme", id.split(".")[1] as TweakState["theme"]);
   };
 
@@ -1202,6 +1218,15 @@ export default function App() {
       {prompt && <PromptModal {...prompt} onClose={() => setPrompt(null)} />}
       {diff && <DiffModal diff={diff} onClose={() => setDiff(null)} />}
       {about && <About version={APP_VERSION} onClose={() => setAbout(false)} />}
+      {signin && (
+        <GitHubSignIn
+          onClose={() => setSignin(false)}
+          onSuccess={() => {
+            flash("Signed in to GitHub");
+            refreshGit();
+          }}
+        />
+      )}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

@@ -31,8 +31,9 @@ Add the minimum permission when introducing a plugin (updater, fs-watch, shell).
 
 ## GitHub credentials (push)
 
-- Today: `git push` uses whatever the system git credential helper already has (HTTPS token, SSH key, Keychain). IWE adds nothing.
-- Planned "Sign in to GitHub" (push-only): **OAuth Device Flow**. IWE never sees a password. The resulting token is handed to the **system git credential helper** (e.g. `osxkeychain`) — IWE does not store it itself. Scope limited to `repo`. This is the _only_ sanctioned credential flow.
+- `git push` uses whatever the system git credential helper already has (HTTPS token, SSH key, Keychain). IWE adds nothing of its own.
+- "Sign in to GitHub" (push-only) uses the **OAuth Device Flow** (`auth_cmds.rs`): IWE never sees a password. The user authorizes a one-time code on github.com; the resulting token (scope `repo`) is piped straight to `git credential approve` so the **system credential helper** stores it. IWE does **not** persist the token itself. This is the _only_ sanctioned credential flow.
+- The OAuth App **client id** is not a secret but is supplied out-of-band (`IWE_GITHUB_CLIENT_ID`, runtime or build-time) so forks ship their own; when unset the feature is hidden. The two GitHub endpoints are called from Rust (`ureq`), never the webview, so the CSP stays `connect-src 'self'`.
 
 ## Content Security Policy
 

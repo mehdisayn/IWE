@@ -1,3 +1,4 @@
+mod auth_cmds;
 mod config_cmds;
 mod fs_cmds;
 mod git_cmds;
@@ -60,6 +61,9 @@ pub fn run() {
             pty_cmds::pty_write,
             pty_cmds::pty_resize,
             pty_cmds::pty_kill,
+            auth_cmds::github_signin_available,
+            auth_cmds::github_device_start,
+            auth_cmds::github_device_poll,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

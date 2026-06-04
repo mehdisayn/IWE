@@ -137,6 +137,28 @@ export const ptyApi = {
   },
 };
 
+// GitHub push sign-in (OAuth Device Flow). The token is stored by the system
+// git credential helper in the backend; the frontend only drives the UX.
+export interface DeviceStart {
+  userCode: string;
+  verificationUri: string;
+  deviceCode: string;
+  interval: number;
+  expiresIn: number;
+}
+export type PollResult =
+  | { status: "pending" }
+  | { status: "slow_down" }
+  | { status: "ok" }
+  | { status: "error"; message: string };
+
+export const authApi = {
+  available: (): Promise<boolean> =>
+    IS_TAURI ? invoke<boolean>("github_signin_available") : Promise.resolve(false),
+  start: () => invoke<DeviceStart>("github_device_start"),
+  poll: (deviceCode: string) => invoke<PollResult>("github_device_poll", { deviceCode }),
+};
+
 // Misc native helpers and the native-menu event bridge.
 export const miscApi = {
   openExternal: (url: string): Promise<void> => {
