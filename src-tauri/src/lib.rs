@@ -1,6 +1,7 @@
 mod config_cmds;
 mod fs_cmds;
 mod git_cmds;
+mod menu;
 mod term_cmds;
 mod watch_cmds;
 
@@ -18,8 +19,11 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            let handle = app.handle().clone();
+            app.set_menu(menu::build(&handle)?)?;
             Ok(())
         })
+        .on_menu_event(menu::handle)
         .invoke_handler(tauri::generate_handler![
             fs_cmds::pick_folder,
             fs_cmds::list_dir,
@@ -49,6 +53,7 @@ pub fn run() {
             config_cmds::write_config,
             watch_cmds::watch_workspace,
             watch_cmds::unwatch,
+            menu::open_external,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

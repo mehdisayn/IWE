@@ -114,6 +114,20 @@ export const watchApi = {
   },
 };
 
+// Misc native helpers and the native-menu event bridge.
+export const miscApi = {
+  openExternal: (url: string): Promise<void> => {
+    if (IS_TAURI) return invoke<void>("open_external", { url });
+    window.open(url, "_blank", "noopener");
+    return Promise.resolve();
+  },
+  onMenu: async (cb: (id: string) => void): Promise<Unlisten> => {
+    if (!IS_TAURI) return () => {};
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<string>("menu", (e) => cb(e.payload));
+  },
+};
+
 // Per-workspace tab state restored on reopen.
 export interface WorkspaceState {
   tabs: string[];

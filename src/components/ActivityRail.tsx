@@ -23,12 +23,14 @@ export function ActivityRail({ active, gitCount, onToggle }: ActivityRailProps) 
     { id: "git" as const, icon: "git", title: "Source Control  (⌘⇧G)", badge: gitCount },
   ];
   return (
-    <div className="rail">
+    <nav className="rail" aria-label="Primary">
       {items.map((it) => (
         <button
           key={it.id}
           className={"rail-btn" + (active[it.id] ? " on" : "")}
           title={it.title}
+          aria-label={it.title.replace(/\s*\(.*\)\s*/, "")}
+          aria-pressed={active[it.id]}
           onClick={() => onToggle(it.id)}
         >
           <Icon name={it.icon} size={22} stroke={1.6} />
@@ -36,12 +38,19 @@ export function ActivityRail({ active, gitCount, onToggle }: ActivityRailProps) 
         </button>
       ))}
       <div className="spacer" />
-      <button className="rail-btn" title="Sync workspace" onClick={() => onToggle("sync")}>
+      <button
+        className="rail-btn"
+        title="Sync workspace"
+        aria-label="Sync workspace"
+        onClick={() => onToggle("sync")}
+      >
         <Icon name="cloud-sync" size={22} stroke={1.6} />
       </button>
       <button
         className={"rail-btn" + (active.terminal ? " on" : "")}
         title="Terminal  (⌘`)"
+        aria-label="Toggle terminal"
+        aria-pressed={active.terminal}
         onClick={() => onToggle("terminal")}
       >
         <Icon name="terminal" size={22} stroke={1.6} />
@@ -49,10 +58,12 @@ export function ActivityRail({ active, gitCount, onToggle }: ActivityRailProps) 
       <button
         className={"rail-btn" + (active.settings ? " on" : "")}
         title="Settings  (⌘,)"
+        aria-label="Open settings"
+        aria-pressed={active.settings}
         onClick={() => onToggle("settings")}
       >
         <Icon name="settings" size={21} stroke={1.6} />
       </button>
-    </div>
+    </nav>
   );
 }

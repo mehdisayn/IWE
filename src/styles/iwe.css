@@ -1225,6 +1225,70 @@ button {
   font-size: 12.5px;
 }
 
+/* ============================================================ about modal */
+.about-modal {
+  position: relative;
+  width: min(420px, 92vw);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px 26px 20px;
+  text-align: center;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+.about-mark {
+  font-weight: 800;
+  font-size: 30px;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.about-name {
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.about-ver {
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.about-desc {
+  margin: 14px 0 16px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+.about-links {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.about-links .btn {
+  flex: 0 0 auto;
+}
+.about-foot {
+  margin-top: 18px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.about-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+}
+.about-close:hover {
+  background: var(--elevated);
+  color: var(--text);
+}
+
 /* ============================================================ terminal */
 .terminal {
   flex: 0 0 var(--term-h, 240px);

@@ -15,6 +15,7 @@ import { Settings } from "./components/overlays/Settings";
 import { Onboarding } from "./components/overlays/Onboarding";
 import { PromptModal, type PromptConfig } from "./components/overlays/PromptModal";
 import { DiffModal, type DiffData } from "./components/overlays/DiffModal";
+import { About } from "./components/overlays/About";
 import { Dashboard } from "./components/Dashboard";
 import { wordCount } from "./lib/markdown";
 import {
@@ -23,6 +24,7 @@ import {
   gitApi,
   configApi,
   watchApi,
+  miscApi,
   type PersistedConfig,
   type Unlisten,
 } from "./lib/tauri";
@@ -36,6 +38,9 @@ import type {
   TreeNode,
   TweakState,
 } from "./types";
+
+// Kept in sync with src-tauri/tauri.conf.json + Cargo.toml.
+const APP_VERSION = "0.1.0";
 
 // Per-file load status, so binary/oversized files show a placeholder instead of
 // being decoded into the editor.
@@ -141,6 +146,7 @@ export default function App() {
   });
   const [commitMsg, setCommitMsg] = useState("");
   const [diff, setDiff] = useState<DiffData | null>(null);
+  const [about, setAbout] = useState(false);
 
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; node: TreeNode | null } | null>(null);
@@ -479,6 +485,26 @@ export default function App() {
     };
   }, []);
 
+  // Native menu events are routed to the same handlers as the command palette.
+  // menuRef is reassigned each render (below) so the once-mounted listener never
+  // closes over stale handlers.
+  const menuRef = useRef<(id: string) => void>(() => {});
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    let un: Unlisten | undefined;
+    let disposed = false;
+    miscApi
+      .onMenu((id) => menuRef.current(id))
+      .then((u) => {
+        if (disposed) u();
+        else un = u;
+      });
+    return () => {
+      disposed = true;
+      if (un) un();
+    };
+  }, []);
+
   const editActive = (val: string) => {
     if (!active || active === "__settings__" || active === "__dashboard__") return;
     setFiles((f) => ({ ...f, [active]: val }));
@@ -783,6 +809,7 @@ export default function App() {
       { id: "theme.slate", label: "Theme: Soft Slate", icon: "eye" },
       { id: "theme.terminal", label: "Theme: True Terminal", icon: "terminal" },
       { id: "theme.warm", label: "Theme: Warm Ink", icon: "book" },
+      { id: "help.about", label: "Help: About IWE", icon: "git" },
     ],
     []
   );
@@ -829,8 +856,23 @@ export default function App() {
       setShowGit(true);
     } else if (id === "git.push") push();
     else if (id === "settings.open") openSettings();
+    else if (id === "help.about") setAbout(true);
     else if (id.startsWith("theme.")) setTweak("theme", id.split(".")[1] as TweakState["theme"]);
   };
+
+  // Route native-menu item ids (see src-tauri/src/menu.rs) to app actions.
+  const handleMenu = (id: string) => {
+    if (id === "about") setAbout(true);
+    else if (id === "settings") openSettings();
+    else if (id === "new") ctxAction("newfile", null);
+    else if (id === "save") saveActive();
+    else if (id === "open") {
+      if (IS_TAURI) pickFolder();
+    } else if (id === "toggle.sidebar") setShowSidebar((v) => !v);
+    else if (id === "toggle.terminal") setShowTerm((v) => !v);
+    else if (id === "toggle.git") setShowGit((v) => !v);
+  };
+  menuRef.current = handleMenu;
 
   const totalWords = useMemo(
     () => Object.keys(files).reduce((n, p) => n + wordCount(files[p]), 0),
@@ -956,6 +998,8 @@ export default function App() {
           <button
             className={"tb-btn" + (showSidebar ? " on" : "")}
             title="Sidebar (⌘B)"
+            aria-label="Toggle sidebar"
+            aria-pressed={showSidebar}
             onClick={() => setShowSidebar((v) => !v)}
           >
             <Icon name="files" size={16} />
@@ -963,6 +1007,8 @@ export default function App() {
           <button
             className={"tb-btn" + (showGit ? " on" : "")}
             title="Source Control (⌘⇧G)"
+            aria-label="Toggle source control"
+            aria-pressed={showGit}
             onClick={() => setShowGit((v) => !v)}
           >
             <Icon name="git" size={16} />
@@ -970,6 +1016,8 @@ export default function App() {
           <button
             className={"tb-btn" + (showTerm ? " on" : "")}
             title="Terminal (⌘`)"
+            aria-label="Toggle terminal"
+            aria-pressed={showTerm}
             onClick={() => setShowTerm((v) => !v)}
           >
             <Icon name="terminal" size={16} />
@@ -1153,6 +1201,7 @@ export default function App() {
       )}
       {prompt && <PromptModal {...prompt} onClose={() => setPrompt(null)} />}
       {diff && <DiffModal diff={diff} onClose={() => setDiff(null)} />}
+      {about && <About version={APP_VERSION} onClose={() => setAbout(false)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
