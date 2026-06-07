@@ -1,56 +1,69 @@
 # IWE — Integrated Writing Environment
 
-A markdown workspace with a built-in terminal and Git, for people who write.
+![IWE Editor](https://via.placeholder.com/800x450.png?text=IWE+Editor+Interface)
 
-This repo currently contains the **frontend implementation** of the design — the full v1 app shell ported from the Claude Design prototype into typed React + Vite. All data is mocked (sample manuscript vault "The Salt Road"). Real OS integrations (filesystem, libgit2, PTY terminal) will be added when the Tauri shell is wired up.
+A markdown workspace with a built-in interactive terminal and Git interface, specifically designed for people who write. Whether you are a developer practicing "Docs as Code", an author managing a large manuscript, or a technical writer leveraging AI tools directly in your workspace, IWE brings the tools you need into one cohesive, distraction-free environment.
 
-## Stack
+## 🚀 Why it was built
 
-- **Vite + React 18 + TypeScript** — frontend
-- **Tauri (planned)** — desktop shell. Not yet scaffolded; requires installing Rust via `rustup` first. The web frontend in `src/` will become the Tauri webview as-is.
-- **Tailwind (planned)** — not added. The design uses a thorough theme-variable CSS system (`src/styles/iwe.css`, three themes via `[data-theme]`); Tailwind utilities can be layered in later when building net-new UI.
+Writers and developers often have to juggle multiple tools to get their work done:
+1. A markdown editor to write the content.
+2. A terminal to execute build scripts, test code, or run AI CLI tools.
+3. A Git client for version control and syncing.
 
-## Run
+IWE solves this fragmentation by integrating these three pillars into a single, lightweight desktop application. It provides a seamless workspace where you don't have to leave the editor to commit your changes or run your scripts. 
+
+## 🎯 What it does (Use Cases)
+
+- **Technical Writing:** Write documentation for software projects, run code examples or compilers natively in the built-in terminal, and commit changes straight to GitHub.
+- **Novel & Book Writing:** Manage large manuscripts with chapters split across multiple markdown files. Use Git to track character arcs, plot changes, and maintain a robust version history.
+- **AI-Assisted Writing:** Spin up an interactive AI CLI directly in the built-in PTY terminal to chat, generate content, or edit drafts without losing your flow.
+
+## ✨ Features
+
+- **📝 Markdown Editor:** Split-pane live preview, syntax highlighting, and completely accurate native workspace word counts.
+- **💻 Built-in Interactive Terminal:** Fully interactive PTY terminal powered by Rust and `xterm.js`. Seamlessly supports `vim`, `nano`, interactive REPLs (like `python`), and AI CLIs.
+- **🐙 Git Integration:** Visual source control panel, auto-commit on save, and seamless GitHub syncing (with automatic upstream branch handling).
+- **📁 Secure File Management:** Safely create, rename, and manage heavily nested files and folders without risking data loss.
+- **🎨 Beautiful Themes:** Comes with three carefully curated themes: Soft Slate (VS Code-style), True Terminal (Monospace Green-on-Black), and Warm Ink (Reading-oriented).
+- **⚡ Fast & Lightweight:** Built on top of Rust (Tauri) and React.
+
+## 📦 Installation
+
+To quickly install IWE on your Linux system, run the automated installation script:
 
 ```bash
+curl -sSL https://raw.githubusercontent.com/mehdisayn/IWE/main/install.sh | bash
+```
+
+Alternatively, you can build from source:
+
+1. Ensure you have Node.js (v18+) and Rust (`rustup`) installed.
+2. Install Tauri prerequisites for your OS (e.g., `libwebkit2gtk-4.1-dev`, `build-essential` on Ubuntu).
+3. Clone and build:
+```bash
+git clone https://github.com/mehdisayn/IWE.git
+cd IWE
 npm install
-npm run dev      # http://localhost:1420
-npm run build
+npm run tauri:build
 ```
 
-## Layout
+## 🗑️ Uninstallation
 
-```
-src/
-├── App.tsx                       # orchestrator: state, shortcuts, layout
-├── main.tsx                      # React entrypoint
-├── types.ts                      # shared types (Vault, GitState, TweakState, etc.)
-├── styles/iwe.css                # full theme system + component styles
-├── data/vault.ts                 # mock manuscript vault
-├── lib/markdown.ts               # markdown render + syntax-highlight overlay
-└── components/
-    ├── Icon.tsx                  # stroke icon set
-    ├── ActivityRail.tsx          # left-most icon rail
-    ├── Sidebar.tsx               # file tree + repo selector
-    ├── GitPanel.tsx              # source control panel
-    ├── Terminal.tsx              # mock zsh terminal with tabs
-    ├── Dashboard.tsx             # workspace dashboard
-    ├── editor/
-    │   ├── Tabs.tsx
-    │   ├── EditorToolbar.tsx     # breadcrumbs + edit/preview/split segmented
-    │   ├── CodeEditor.tsx        # textarea + highlight overlay + wikilink autocomplete
-    │   ├── Preview.tsx           # rendered markdown
-    │   └── StatusBar.tsx         # word count, caret, sync status
-    └── overlays/
-        ├── Palette.tsx           # command palette (⌘⇧P) + quick switcher (⌘P)
-        ├── ContextMenu.tsx       # file tree right-click
-        ├── RepoMenu.tsx          # repo dropdown
-        ├── Settings.tsx          # settings tab
-        ├── Onboarding.tsx        # first-launch screen
-        └── PromptModal.tsx       # small input modal for rename/new/delete
+If you installed IWE using the `install.sh` script, you can easily remove it from your system with these commands:
+
+```bash
+# Remove the application bundle
+rm -rf ~/.local/share/iwe
+
+# Remove the desktop entry
+rm ~/.local/share/applications/iwe.desktop
+
+# Remove the CLI symlink
+rm ~/.local/bin/iwe
 ```
 
-## Keyboard shortcuts
+## ⌨️ Keyboard Shortcuts
 
 | Action | Shortcut |
 | --- | --- |
@@ -64,22 +77,10 @@ src/
 | Save | `⌘S` |
 | Settings | `⌘,` |
 
-## Themes
+## 🤝 Contributing
 
-Three themes ship in the CSS, switchable from Settings or the command palette:
+This is an open-source project! If you'd like to contribute, please check out the [CONTRIBUTING.md](CONTRIBUTING.md) guide. We welcome pull requests for bug fixes, new features, and documentation improvements.
 
-- **Soft Slate** — VS Code-style dark grey (default)
-- **True Terminal** — green-on-black, monospace UI
-- **Warm Ink** — warm brown/cream, more reading-oriented
+## 📄 License
 
-## Next steps
-
-1. **Tauri shell** — `npm create tauri-app` to add `src-tauri/`; wire `cmd_open_folder`, `cmd_read_file`, `cmd_write_file`.
-2. **Real markdown editor** — swap `CodeEditor.tsx` for CodeMirror 6 with markdown grammar.
-3. **Real terminal** — replace the mock command runner with `xterm.js` + a PTY bridge from Rust.
-4. **Real git** — replace mock `GitState` with `libgit2` (via `git2` crate) or `gh` shell-outs.
-5. **Multi-repo sync** — per-folder repo mapping as described in `plan/idea.md`.
-
-## Design source
-
-The prototype this implementation matches lives at `/tmp/iwe-design/` (unpacked from the Claude Design handoff bundle). See `plan/idea.md` for the product brief.
+IWE is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
