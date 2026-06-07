@@ -16,7 +16,6 @@ pub fn run() {
             .build(),
         )?;
       }
-      app.manage(term_cmds::PtyManager::new());
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -36,10 +35,7 @@ pub fn run() {
       git_cmds::git_commit,
       git_cmds::git_push,
       git_cmds::git_log,
-      term_cmds::spawn_pty,
-      term_cmds::write_pty,
-      term_cmds::resize_pty,
-      term_cmds::close_pty,
+      term_cmds::open_external_terminal,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

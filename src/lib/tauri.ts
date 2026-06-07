@@ -83,8 +83,5 @@ export interface CommandOutput {
 }
 
 export const termApi = {
-  spawnPty: (cwd: string, cols: number, rows: number) => invoke<number>("spawn_pty", { cwd, cols, rows }),
-  writePty: (id: number, data: string) => invoke<void>("write_pty", { id, data }),
-  resizePty: (id: number, cols: number, rows: number) => invoke<void>("resize_pty", { id, cols, rows }),
-  closePty: (id: number) => invoke<void>("close_pty", { id }),
+  openExternalTerminal: (cwd: string) => invoke<void>("open_external_terminal", { cwd }),
 };
