@@ -68,6 +68,7 @@ export default function App() {
   const [root, setRoot] = useState<string | null>(null);
   const [folderName, setFolderName] = useState("");
   const [tree, setTree] = useState<TreeNode[]>([]);
+  const [totalWords, setTotalWords] = useState(0);
   const fileNames = useMemo(() => flatten(tree, []), [tree]);
 
   const [files, setFiles] = useState<Record<string, string>>({});
@@ -146,6 +147,7 @@ export default function App() {
         .listDir(r)
         .then((t) => setTree(applyOpen(t)))
         .catch((e) => flash("Reload failed: " + e));
+      fsApi.countWords(r).then(setTotalWords).catch(console.error);
     },
     [root, tree, flash]
   );
@@ -163,6 +165,7 @@ export default function App() {
         setTabs([]);
         setActive(null);
         refreshGit(abs);
+        fsApi.countWords(abs).then(setTotalWords).catch(console.error);
         flash("Opened " + (abs.split("/").pop() || abs));
       } catch (e) {
         flash("Open failed: " + e);
@@ -271,6 +274,7 @@ export default function App() {
         } else {
           refreshGit();
         }
+        if (root) fsApi.countWords(root).then(setTotalWords).catch(console.error);
       })
       .catch((e) => flash("Save failed: " + e));
   }, [active, files, saved, flash, root, refreshGit, t.commitOnSave, git.branch]);
@@ -283,7 +287,10 @@ export default function App() {
         setSaved((s) => ({ ...s, [active]: content }));
         fsApi
           .writeFile(root, active, content)
-          .then(() => refreshGit())
+          .then(() => {
+            refreshGit();
+            fsApi.countWords(root).then(setTotalWords).catch(console.error);
+          })
           .catch(() => {});
       }
     }, 1200);
@@ -428,6 +435,28 @@ export default function App() {
       .then(() => {
         reloadTree();
         refreshGit();
+        setFiles((prev) => {
+          const next = { ...prev };
+          Object.keys(next).forEach((p) => {
+            const mapped = remap(p);
+            if (mapped !== p) {
+              next[mapped] = next[p];
+              delete next[p];
+            }
+          });
+          return next;
+        });
+        setSaved((prev) => {
+          const next = { ...prev };
+          Object.keys(next).forEach((p) => {
+            const mapped = remap(p);
+            if (mapped !== p) {
+              next[mapped] = next[p];
+              delete next[p];
+            }
+          });
+          return next;
+        });
         setTabs((tb) => tb.map(remap));
         setActive((a) => (a ? remap(a) : a));
         flash("Renamed → " + newName);
@@ -443,6 +472,20 @@ export default function App() {
       .then(() => {
         reloadTree();
         refreshGit();
+        setFiles((prev) => {
+          const next = { ...prev };
+          Object.keys(next).forEach((p) => {
+            if (isUnder(p)) delete next[p];
+          });
+          return next;
+        });
+        setSaved((prev) => {
+          const next = { ...prev };
+          Object.keys(next).forEach((p) => {
+            if (isUnder(p)) delete next[p];
+          });
+          return next;
+        });
         setTabs((tb) => tb.filter((p) => !isUnder(p)));
         setActive((a) => (a && isUnder(a) ? null : a));
         flash("Deleted · " + node.name);
@@ -516,10 +559,7 @@ export default function App() {
     else if (id.startsWith("theme.")) setTweak("theme", id.split(".")[1] as TweakState["theme"]);
   };
 
-  const totalWords = useMemo(
-    () => Object.keys(files).reduce((n, p) => n + wordCount(files[p]), 0),
-    [files]
-  );
+
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

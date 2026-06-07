@@ -24,6 +24,17 @@ async function invoke<T = unknown>(cmd: string, args?: Record<string, unknown>):
   return _invoke<T>(cmd, args);
 }
 
+let _listen: typeof import("@tauri-apps/api/event").listen | null = null;
+
+export async function listen<T>(event: string, handler: (e: { payload: T }) => void) {
+  if (!IS_TAURI) return () => {};
+  if (!_listen) {
+    const mod = await import("@tauri-apps/api/event");
+    _listen = mod.listen;
+  }
+  return _listen<T>(event, handler);
+}
+
 export const fsApi = {
   pickFolder: () => invoke<string | null>("pick_folder"),
   listDir: (root: string) => invoke<TreeNode[]>("list_dir", { root }),
@@ -37,6 +48,7 @@ export const fsApi = {
   rename: (root: string, from: string, to: string) =>
     invoke<void>("rename", { root, from, to }),
   delete: (root: string, path: string) => invoke<void>("delete", { root, path }),
+  countWords: (root: string) => invoke<number>("count_words", { root }),
 };
 
 export interface RawGitChange {
@@ -71,6 +83,8 @@ export interface CommandOutput {
 }
 
 export const termApi = {
-  run: (cwd: string, command: string) => invoke<CommandOutput>("run_command", { cwd, command }),
-  changeDir: (cwd: string, target: string) => invoke<string>("change_dir", { cwd, target }),
+  spawnPty: (cwd: string, cols: number, rows: number) => invoke<number>("spawn_pty", { cwd, cols, rows }),
+  writePty: (id: number, data: string) => invoke<void>("write_pty", { id, data }),
+  resizePty: (id: number, cols: number, rows: number) => invoke<void>("resize_pty", { id, cols, rows }),
+  closePty: (id: number) => invoke<void>("close_pty", { id }),
 };

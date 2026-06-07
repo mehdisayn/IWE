@@ -34,6 +34,8 @@ fn git(root: &str, args: &[&str]) -> Result<GitCommandResult, String> {
     let out = Command::new("git")
         .args(args)
         .current_dir(root)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_ASKPASS", "echo")
         .output()
         .map_err(|e| format!("failed to run git: {}", e))?;
     Ok(GitCommandResult {
@@ -197,7 +199,17 @@ pub fn git_commit(root: String, message: String) -> Result<String, String> {
 
 #[tauri::command]
 pub fn git_push(root: String) -> Result<String, String> {
-    let res = git(&root, &["push"])?;
+    let mut res = git(&root, &["push"])?;
+    
+    // Auto-setup upstream if there's no upstream branch
+    if !res.ok && res.stderr.contains("has no upstream branch") {
+        let branch_res = git(&root, &["rev-parse", "--abbrev-ref", "HEAD"])?;
+        if branch_res.ok {
+            let branch = branch_res.stdout.trim();
+            res = git(&root, &["push", "--set-upstream", "origin", branch])?;
+        }
+    }
+
     if res.ok {
         // git prints push progress to stderr even on success.
         Ok(format!("{}{}", res.stdout, res.stderr))

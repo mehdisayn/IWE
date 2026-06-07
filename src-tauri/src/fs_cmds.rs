@@ -86,19 +86,35 @@ fn walk(dir: &Path, root: &Path) -> std::io::Result<Vec<TreeNode>> {
 }
 
 fn resolve(root: &str, rel: &str) -> Result<PathBuf, String> {
+    // Prevent directory traversal attacks lexically.
+    if Path::new(rel).components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err("Path contains parent directory traversal".to_string());
+    }
+
     let abs = PathBuf::from(root).join(rel);
-    // Guard against escaping the root via `..` segments.
     let canonical_root = PathBuf::from(root)
         .canonicalize()
         .map_err(|e| e.to_string())?;
-    let canonical_target = abs
-        .parent()
-        .ok_or_else(|| "no parent".to_string())?
+
+    // Find the nearest existing ancestor to canonicalize and verify it doesn't escape.
+    // (This prevents traversing via symlinks that point outside the root)
+    let mut ancestor = abs.clone();
+    while !ancestor.exists() {
+        if let Some(parent) = ancestor.parent() {
+            ancestor = parent.to_path_buf();
+        } else {
+            return Err("Invalid path".to_string());
+        }
+    }
+
+    let canonical_ancestor = ancestor
         .canonicalize()
         .map_err(|e| e.to_string())?;
-    if !canonical_target.starts_with(&canonical_root) {
+        
+    if !canonical_ancestor.starts_with(&canonical_root) {
         return Err("Path escapes workspace root".to_string());
     }
+    
     Ok(abs)
 }
 
@@ -150,4 +166,36 @@ pub fn delete(root: String, path: String) -> Result<(), String> {
     } else {
         fs::remove_file(&abs).map_err(|e| e.to_string())
     }
+}
+
+#[tauri::command]
+pub fn count_words(root: String) -> Result<usize, String> {
+    let root_path = PathBuf::from(&root);
+    if !root_path.is_dir() {
+        return Err(format!("Not a directory: {}", root));
+    }
+    
+    let mut total = 0;
+    
+    fn walk_count(dir: &Path, total: &mut usize) -> std::io::Result<()> {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') || name == "node_modules" || name == "target" {
+                continue;
+            }
+            let ft = entry.file_type()?;
+            if ft.is_dir() {
+                walk_count(&entry.path(), total)?;
+            } else if ft.is_file() && name.ends_with(".md") {
+                if let Ok(content) = fs::read_to_string(entry.path()) {
+                    *total += content.split_whitespace().count();
+                }
+            }
+        }
+        Ok(())
+    }
+    
+    walk_count(&root_path, &mut total).map_err(|e| e.to_string())?;
+    Ok(total)
 }

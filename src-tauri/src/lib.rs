@@ -2,6 +2,8 @@ mod fs_cmds;
 mod git_cmds;
 mod term_cmds;
 
+use tauri::Manager;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -14,6 +16,7 @@ pub fn run() {
             .build(),
         )?;
       }
+      app.manage(term_cmds::PtyManager::new());
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -25,6 +28,7 @@ pub fn run() {
       fs_cmds::create_folder,
       fs_cmds::rename,
       fs_cmds::delete,
+      fs_cmds::count_words,
       git_cmds::git_status,
       git_cmds::git_stage,
       git_cmds::git_stage_all,
@@ -32,8 +36,10 @@ pub fn run() {
       git_cmds::git_commit,
       git_cmds::git_push,
       git_cmds::git_log,
-      term_cmds::run_command,
-      term_cmds::change_dir,
+      term_cmds::spawn_pty,
+      term_cmds::write_pty,
+      term_cmds::resize_pty,
+      term_cmds::close_pty,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
